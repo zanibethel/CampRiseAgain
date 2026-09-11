@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" role="img" aria-labelledby="title desc">
+  <title id="title">Camp Rise Again</title>
+  <desc id="desc">Circular camp badge with sunrise, mountains, pine trees, and a flowing river.</desc>
+  <defs>
+    <clipPath id="badgeClip"><circle cx="400" cy="400" r="370"/></clipPath>
+    <path id="titleArc" d="M 105 325 A 318 318 0 0 1 695 325"/>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1597bd"/>
+      <stop offset="1" stop-color="#0f6f91"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="400" cy="400" r="382" fill="#fffdf4" stroke="#082f24" stroke-width="16"/>
+  <circle cx="400" cy="400" r="365" fill="#f8f4df" stroke="#f4e3b1" stroke-width="8"/>
+
+  <g clip-path="url(#badgeClip)">
+    <rect width="800" height="800" fill="#fffdf4"/>
+
+    <circle cx="400" cy="315" r="92" fill="#f7a91f"/>
+    <g stroke="#f7a91f" stroke-width="9" stroke-linecap="round" opacity=".95">
+      <line x1="400" y1="185" x2="400" y2="135"/>
+      <line x1="350" y1="192" x2="330" y2="145"/>
+      <line x1="450" y1="192" x2="470" y2="145"/>
+      <line x1="305" y1="215" x2="270" y2="175"/>
+      <line x1="495" y1="215" x2="530" y2="175"/>
+      <line x1="270" y1="250" x2="225" y2="225"/>
+      <line x1="530" y1="250" x2="575" y2="225"/>
+    </g>
+
+    <path d="M115 465 L250 290 L340 390 L455 245 L605 410 L688 320 L790 468 Z" fill="#0d4d68" stroke="#07374f" stroke-width="9"/>
+    <path d="M175 408 L250 290 L300 345 L340 390 L455 245 L520 315 L605 410 L688 320 L738 380" fill="none" stroke="#f5fbff" stroke-width="20" stroke-linejoin="round"/>
+    <path d="M188 415 L252 313 L306 369 L340 401 M410 306 L455 265 L505 320 M646 367 L687 340 L724 381" fill="none" stroke="#7bc4df" stroke-width="8" stroke-linecap="round"/>
+
+    <path d="M0 525 Q120 445 230 490 Q340 445 445 492 Q565 448 800 520 L800 800 L0 800 Z" fill="#124d35"/>
+
+    <g fill="#0b3f2b" stroke="#082f24" stroke-width="4">
+      <path d="M95 545 l38 -78 38 78 h-22 l28 54 h-32 l24 50 h-72 l24-50 h-32 l28-54z"/>
+      <path d="M165 560 l34 -70 34 70 h-20 l25 49 h-28 l21 44 h-64 l21-44 h-28 l25-49z"/>
+      <path d="M640 550 l38 -82 38 82 h-22 l28 55 h-32 l24 50 h-72 l24-50 h-32 l28-55z"/>
+      <path d="M708 565 l34 -72 34 72 h-20 l25 48 h-28 l20 42 h-62 l20-42 h-28 l25-48z"/>
+    </g>
+
+    <path d="M278 470 C325 520 334 570 304 614 C280 648 304 674 370 704 C401 718 400 750 400 800 L800 800 L800 555 C669 500 579 495 515 536 C467 566 451 607 448 667 C445 718 428 760 400 800 C398 742 385 698 349 665 C315 634 322 599 353 570 C381 544 369 508 326 472 Z" fill="url(#water)"/>
+    <path d="M316 493 C347 532 350 563 325 598 M349 525 C377 551 378 578 353 607 M496 559 C463 594 460 632 462 670" fill="none" stroke="#d8f7ff" stroke-width="10" stroke-linecap="round" opacity=".95"/>
+    <path d="M330 624 C365 638 402 640 444 626 M350 682 C382 695 421 696 456 683 M378 738 C401 745 424 746 445 739" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" opacity=".95"/>
+
+    <g fill="#85918c" stroke="#45514d" stroke-width="5">
+      <ellipse cx="235" cy="612" rx="58" ry="34"/>
+      <ellipse cx="260" cy="675" rx="70" ry="40"/>
+      <ellipse cx="565" cy="620" rx="62" ry="36"/>
+      <ellipse cx="585" cy="692" rx="76" ry="42"/>
+    </g>
+
+    <path d="M125 679 L325 566" stroke="#7d4a27" stroke-width="22" stroke-linecap="round"/>
+    <path d="M125 679 L325 566" stroke="#bb7747" stroke-width="10" stroke-linecap="round"/>
+  </g>
+
+  <text fill="#fff5d7" stroke="#082f24" stroke-width="8" paint-order="stroke" font-family="Georgia, 'Times New Roman', serif" font-size="78" font-weight="700" letter-spacing="1">
+    <textPath href="#titleArc" startOffset="50%" text-anchor="middle">CAMP RISE AGAIN</textPath>
+  </text>
+
+  <circle cx="400" cy="400" r="370" fill="none" stroke="#082f24" stroke-width="8"/>
+</svg>
