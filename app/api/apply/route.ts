@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(b.email))) return NextResponse.json({ error: "Please enter a valid email address." }, { status: 400 });
 
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase.from("camper_applications").insert({
+    const { data, error } = await supabase.from("camp_rise_again_camper_applications").insert({
       first_name: String(b.firstName).trim(), last_name: String(b.lastName).trim(), email: String(b.email).trim().toLowerCase(), phone: String(b.phone).trim(),
       address_1: String(b.address1).trim(), address_2: String(b.address2 ?? "").trim() || null, city: String(b.city).trim(), state: String(b.state).trim(), postal_code: String(b.postalCode).trim(),
       date_of_birth: String(b.dateOfBirth), shirt_size: String(b.shirtSize), season_preference: String(b.season), notes: String(b.notes ?? "").trim() || null,
