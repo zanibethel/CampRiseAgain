@@ -21,7 +21,11 @@ Copy `.env.example` to `.env.local` and set:
 Current submission recipient: `Schofieldtierra@gmail.com`
 
 ## Database
-Apply `supabase/migrations/20260911_create_camp_forms.sql` to the dedicated Camp Rise Again Supabase project.
+Camp Rise Again reuses the existing CreatorHub Supabase project to avoid an additional monthly project charge. Its data is isolated in dedicated tables:
+- `camp_rise_again_camper_applications`
+- `camp_rise_again_volunteer_applications`
+
+The migration is stored at `supabase/migrations/20260911_create_camp_forms.sql` and has been applied to CreatorHub Supabase.
 
 ## Privacy note
-Camper applications contain address and date-of-birth information. Keep the Supabase tables server-only and restrict access to trusted camp administrators.
+Camper applications contain address and date-of-birth information. The Camp Rise Again tables use RLS, revoke anonymous/authenticated access, and are intended to be accessed only by trusted server-side code and camp administrators.
