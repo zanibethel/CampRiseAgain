@@ -1,0 +1,58 @@
+:root {
+  --forest: #082f24;
+  --forest-2: #145c3d;
+  --cream: #fff5d7;
+  --sun: #f7a91f;
+  --river: #0f7fa1;
+  --ink: #102a25;
+  --muted: #5f6f69;
+  --card: #ffffff;
+  --line: #d7e1dc;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; color: var(--ink); background: #f7faf8; font-family: Arial, Helvetica, sans-serif; }
+a { color: inherit; text-decoration: none; }
+header { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,.95); border-bottom: 1px solid var(--line); backdrop-filter: blur(8px); }
+.nav { max-width: 1120px; margin: auto; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; color: var(--forest); }
+.brand img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; }
+.navlinks { display: flex; gap: 18px; align-items: center; font-weight: 700; font-size: 14px; }
+.btn { display: inline-flex; justify-content: center; align-items: center; border: 0; border-radius: 999px; padding: 12px 18px; font-weight: 800; cursor: pointer; }
+.btn-primary { background: var(--forest); color: white; }
+.btn-secondary { background: var(--sun); color: var(--forest); }
+.hero { background: radial-gradient(circle at 20% 20%, #fff8df 0, #f9f6e8 32%, #eaf5ef 100%); }
+.hero-inner { max-width: 1120px; margin: auto; padding: 72px 20px 64px; display: grid; grid-template-columns: 1.1fr .9fr; align-items: center; gap: 48px; }
+.eyebrow { color: var(--forest-2); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; }
+h1 { font-size: clamp(42px, 7vw, 78px); line-height: .98; margin: 14px 0 20px; color: var(--forest); }
+.lead { font-size: 20px; line-height: 1.6; color: #324c44; max-width: 680px; }
+.actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+.logo-card { padding: 18px; border-radius: 36px; background: white; box-shadow: 0 24px 60px rgba(8,47,36,.15); }
+.logo-card img { width: 100%; display: block; border-radius: 26px; }
+.section { max-width: 1120px; margin: auto; padding: 72px 20px; }
+.section h2 { margin: 0 0 14px; font-size: 36px; color: var(--forest); }
+.section-copy { color: var(--muted); max-width: 760px; line-height: 1.7; }
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 30px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 26px; box-shadow: 0 10px 30px rgba(8,47,36,.06); }
+.card h3 { color: var(--forest); margin-top: 0; }
+.form-wrap { max-width: 840px; margin: auto; padding: 56px 20px 80px; }
+.form-card { background: white; border: 1px solid var(--line); border-radius: 24px; padding: 28px; box-shadow: 0 16px 40px rgba(8,47,36,.08); }
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+.field label, legend { font-weight: 800; color: var(--forest); }
+input, select, textarea { width: 100%; border: 1px solid #b8c9c1; border-radius: 12px; padding: 12px 13px; font: inherit; background: white; }
+textarea { min-height: 110px; resize: vertical; }
+fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 18px; }
+.checks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.checks label { display: flex; align-items: center; gap: 9px; font-weight: 600; }
+.checks input { width: auto; }
+.notice { background: #fff8df; border: 1px solid #f5d675; border-radius: 12px; padding: 12px 14px; color: #5b4a16; font-size: 14px; margin: 16px 0; }
+.status { margin-top: 14px; font-weight: 700; }
+footer { background: var(--forest); color: #e8f2ed; padding: 36px 20px; }
+.footer-inner { max-width: 1120px; margin: auto; display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+@media (max-width: 800px) {
+  .hero-inner { grid-template-columns: 1fr; padding-top: 48px; }
+  .cards { grid-template-columns: 1fr; }
+  .navlinks a:not(.btn) { display: none; }
+  .field-grid, .checks { grid-template-columns: 1fr; }
+}
