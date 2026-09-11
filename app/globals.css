@@ -27,8 +27,8 @@ header { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,.95
 h1 { font-size: clamp(42px, 7vw, 78px); line-height: .98; margin: 14px 0 20px; color: var(--forest); }
 .lead { font-size: 20px; line-height: 1.6; color: #324c44; max-width: 680px; }
 .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
-.logo-card { padding: 18px; border-radius: 36px; background: white; box-shadow: 0 24px 60px rgba(8,47,36,.15); }
-.logo-card img { width: 100%; display: block; border-radius: 26px; }
+.logo-card { padding: 20px; border-radius: 36px; background: white; box-shadow: 0 24px 60px rgba(8,47,36,.15); display: flex; align-items: center; justify-content: center; }
+.logo-card img { width: min(100%, 420px); height: auto; display: block; border-radius: 24px; object-fit: contain; filter: contrast(1.03) saturate(1.03); }
 .section { max-width: 1120px; margin: auto; padding: 72px 20px; }
 .section h2 { margin: 0 0 14px; font-size: 36px; color: var(--forest); }
 .section-copy { color: var(--muted); max-width: 760px; line-height: 1.7; }
@@ -51,7 +51,9 @@ fieldset { border: 1px solid var(--line); border-radius: 14px; padding: 16px; ma
 footer { background: var(--forest); color: #e8f2ed; padding: 36px 20px; }
 .footer-inner { max-width: 1120px; margin: auto; display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
 @media (max-width: 800px) {
-  .hero-inner { grid-template-columns: 1fr; padding-top: 48px; }
+  .hero-inner { grid-template-columns: 1fr; padding-top: 48px; gap: 28px; }
+  .logo-card { padding: 16px; border-radius: 28px; }
+  .logo-card img { width: min(100%, 320px); border-radius: 18px; }
   .cards { grid-template-columns: 1fr; }
   .navlinks a:not(.btn) { display: none; }
   .field-grid, .checks { grid-template-columns: 1fr; }
