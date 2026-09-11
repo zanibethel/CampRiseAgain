@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Camp Rise Again",
-  description: "Apply to attend Camp Rise Again or volunteer to support an upcoming camp season.",
+  description: "Camp Rise Again is an adult camp creating a safe, supportive space for people struggling with depression to reconnect, find community, and take another step forward together.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
