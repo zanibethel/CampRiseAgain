@@ -12,7 +12,7 @@ export async function POST(req: Request) {
     if (!["firstName","lastName","email","phone","season","consent"].every((k) => String(b[k] ?? "").trim()) || roles.length === 0) return NextResponse.json({ error: "Please complete the required fields and choose at least one volunteer area." }, { status: 400 });
 
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase.from("volunteer_applications").insert({
+    const { data, error } = await supabase.from("camp_rise_again_volunteer_applications").insert({
       first_name: String(b.firstName).trim(), last_name: String(b.lastName).trim(), email: String(b.email).trim().toLowerCase(), phone: String(b.phone).trim(),
       season_preference: String(b.season), volunteer_roles: roles, notes: String(b.notes ?? "").trim() || null,
     }).select("id").single();
