@@ -72,14 +72,17 @@ export default function Home() {
         <section id="contact" className="section">
           <div className="eyebrow">Contact</div>
           <h2>Questions before you apply?</h2>
-          <p className="section-copy">Camp contact name, phone number, email address, mailing address, and social links will be added here once provided.</p>
+          <p className="section-copy">Send us a message and your email app will open with your answers already included so you can review and send it directly.</p>
+          <div className="actions">
+            <Link className="btn btn-primary" href="/contact">Contact Us</Link>
+          </div>
           <p className="section-copy"><strong>Camp Rise Again is not a crisis service.</strong> If you or someone else is in immediate danger, call 911. In the U.S., you can also call or text 988 for the Suicide & Crisis Lifeline.</p>
         </section>
       </main>
       <footer>
         <div className="footer-inner">
           <strong>Camp Rise Again</strong>
-          <span>Camp contact information coming soon.</span>
+          <span>Camp Rise Again</span>
         </div>
       </footer>
     </>
