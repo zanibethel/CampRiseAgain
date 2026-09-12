@@ -1,8 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
-
-const GOFUNDME_URL = "https://gofund.me/4e650f52a";
+import DonateButton from "@/components/DonateButton";
 
 export default function Home() {
   return (
@@ -78,7 +77,7 @@ export default function Home() {
             Every contribution helps us continue building a welcoming, supportive camp experience for adults who are struggling with depression. Visit our GoFundMe to donate and see the latest fundraising progress.
           </p>
           <div className="actions">
-            <a className="btn btn-primary" href={GOFUNDME_URL} target="_blank" rel="noopener noreferrer">Donate on GoFundMe</a>
+            <DonateButton />
           </div>
         </section>
 
