@@ -7,7 +7,17 @@ let client: SupabaseClient | null = null;
 
 export function getSupabaseBrowserClient() {
   if (!client) {
-    client = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    const base = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    const originalFrom = base.from.bind(base);
+    base.from = ((table: string) => {
+      const mapped = table === "site_settings"
+        ? "camp_rise_again_site_settings"
+        : table === "schedule_items"
+          ? "camp_rise_again_schedule"
+          : table;
+      return originalFrom(mapped);
+    }) as typeof base.from;
+    client = base;
   }
   return client;
 }
