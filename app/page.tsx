@@ -21,7 +21,7 @@ export default function Home() {
               </div>
             </div>
             <div className="logo-card">
-              <Image src="/camp-rise-again-logo-clean.svg" alt="Camp Rise Again mountain and river logo" width={800} height={800} priority />
+              <Image src="/3426A745-DDB8-4CB7-8BBC-9DC68C16B20A.png" alt="Camp Rise Again mountain and river logo" width={800} height={800} priority />
             </div>
           </div>
         </section>
