@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
 import DonateButton from "@/components/DonateButton";
+import TeamSection from "@/components/TeamSection";
 
 export default function Home() {
   return (
@@ -60,6 +61,8 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        <TeamSection />
 
         <section className="section">
           <div className="eyebrow">Keep going</div>
