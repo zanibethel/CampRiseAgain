@@ -1,49 +1,12 @@
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
+import ResourcesList from "@/components/ResourcesList";
 
 export const metadata = {
   title: "Resources | Camp Rise Again",
   description:
     "Mental health, crisis, treatment, and community support resources from Camp Rise Again.",
 };
-
-const resources = [
-  {
-    title: "988 Suicide & Crisis Lifeline",
-    description:
-      "If you are in emotional distress, having thoughts of suicide, or need someone to talk with, call or text 988. Support is available 24/7 in the United States.",
-    href: "https://988lifeline.org/",
-    action: "Visit 988 Lifeline",
-  },
-  {
-    title: "SAMHSA National Helpline",
-    description:
-      "Free, confidential treatment referral and information for mental health and substance use concerns. Call 1-800-662-HELP (4357), 24 hours a day, 365 days a year.",
-    href: "https://www.samhsa.gov/find-help/helplines/national-helpline",
-    action: "Visit SAMHSA",
-  },
-  {
-    title: "FindTreatment.gov",
-    description:
-      "Search for mental health and substance use treatment providers near you using SAMHSA's confidential treatment locator.",
-    href: "https://findtreatment.gov/",
-    action: "Find Treatment",
-  },
-  {
-    title: "NAMI HelpLine",
-    description:
-      "Get mental health information, resource referrals, and peer-informed support from the National Alliance on Mental Illness.",
-    href: "https://www.nami.org/nami-helpline/",
-    action: "Visit NAMI",
-  },
-  {
-    title: "Find Your Local NAMI",
-    description:
-      "Connect with a NAMI organization near you for local programs, support groups, education, and community resources.",
-    href: "https://www.nami.org/find-your-local-nami/",
-    action: "Find Local Support",
-  },
-];
 
 export default function ResourcesPage() {
   return (
@@ -66,26 +29,9 @@ export default function ResourcesPage() {
         </section>
 
         <section className="section" style={{ paddingTop: 0 }}>
-          <div className="eyebrow">National resources</div>
+          <div className="eyebrow">Support resources</div>
           <h2>Places to reach out, learn, and find care.</h2>
-          <div className="cards">
-            {resources.map((resource) => (
-              <article className="card" key={resource.title}>
-                <h3>{resource.title}</h3>
-                <p className="section-copy">{resource.description}</p>
-                <div className="actions">
-                  <a
-                    className="btn btn-primary"
-                    href={resource.href}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {resource.action}
-                  </a>
-                </div>
-              </article>
-            ))}
-          </div>
+          <ResourcesList />
         </section>
 
         <section className="section">
