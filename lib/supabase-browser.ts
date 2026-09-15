@@ -14,7 +14,9 @@ export function getSupabaseBrowserClient() {
         ? "camp_rise_again_site_settings"
         : table === "schedule_items"
           ? "camp_rise_again_schedule"
-          : table;
+          : table === "resources"
+            ? "camp_rise_again_resources"
+            : table;
       return originalFrom(mapped);
     }) as typeof base.from;
     client = base;
