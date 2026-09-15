@@ -55,6 +55,8 @@ footer { background: var(--forest); color: #e8f2ed; padding: 36px 20px; }
   .logo-card { padding: 16px; border-radius: 28px; }
   .logo-card img { width: min(100%, 320px); border-radius: 18px; }
   .cards { grid-template-columns: 1fr; }
-  .navlinks a:not(.btn) { display: none; }
+  .navlinks a:not(.btn):not(.resources-link) { display: none; }
+  .navlinks { gap: 8px; }
+  .resources-link { font-size: 13px; }
   .field-grid, .checks { grid-template-columns: 1fr; }
 }
