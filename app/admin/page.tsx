@@ -26,6 +26,17 @@ type ScheduleItem = {
   sort_order: number;
 };
 
+type ResourceItem = {
+  id: number;
+  title: string;
+  description: string;
+  href: string;
+  action_label: string;
+  category: string;
+  is_active: boolean;
+  sort_order: number;
+};
+
 const defaults: Settings = {
   id: 1,
   announcement: "",
@@ -43,17 +54,20 @@ export default function AdminPage() {
   const [userEmail, setUserEmail] = useState("");
   const [settings, setSettings] = useState<Settings>(defaults);
   const [schedule, setSchedule] = useState<ScheduleItem[]>([]);
+  const [resources, setResources] = useState<ResourceItem[]>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
 
   async function loadContent() {
     if (!supabase) return;
-    const [{ data: settingsData }, { data: scheduleData }] = await Promise.all([
+    const [{ data: settingsData }, { data: scheduleData }, { data: resourceData }] = await Promise.all([
       supabase.from("site_settings").select("*").eq("id", 1).maybeSingle(),
       supabase.from("schedule_items").select("*").order("sort_order").order("id"),
+      supabase.from("resources").select("*").order("sort_order").order("id"),
     ]);
     if (settingsData) setSettings(settingsData as Settings);
     if (scheduleData) setSchedule(scheduleData as ScheduleItem[]);
+    if (resourceData) setResources(resourceData as ResourceItem[]);
   }
 
   useEffect(() => {
@@ -139,6 +153,60 @@ export default function AdminPage() {
     else setSchedule(schedule.filter((x) => x.id !== id));
   }
 
+  async function addResource() {
+    if (!supabase) return;
+    const nextOrder = resources.length ? Math.max(...resources.map((x) => x.sort_order)) + 10 : 10;
+    const { data, error } = await supabase
+      .from("resources")
+      .insert({
+        title: "New resource",
+        description: "",
+        href: "https://",
+        action_label: "Learn More",
+        category: "Support resource",
+        is_active: false,
+        sort_order: nextOrder,
+      })
+      .select("*")
+      .single();
+    if (error) setStatus(error.message);
+    else {
+      setResources([...resources, data as ResourceItem]);
+      setStatus("New resource added. It is hidden until you turn on Show publicly and save it.");
+    }
+  }
+
+  async function saveResource(item: ResourceItem) {
+    if (!supabase) return;
+    const href = item.href.trim();
+    if (!/^https?:\/\//i.test(href)) {
+      setStatus(`Please enter a full http:// or https:// URL for ${item.title}.`);
+      return;
+    }
+    const { error } = await supabase.from("resources").update({
+      title: item.title.trim(),
+      description: item.description.trim(),
+      href,
+      action_label: item.action_label.trim() || "Learn More",
+      category: item.category.trim() || "Support resource",
+      is_active: item.is_active,
+      sort_order: item.sort_order,
+    }).eq("id", item.id);
+    setStatus(error ? error.message : `Saved resource: ${item.title}`);
+  }
+
+  async function deleteResource(id: number) {
+    if (!supabase) return;
+    const item = resources.find((x) => x.id === id);
+    if (!window.confirm(`Delete ${item?.title || "this resource"}?`)) return;
+    const { error } = await supabase.from("resources").delete().eq("id", id);
+    if (error) setStatus(error.message);
+    else {
+      setResources(resources.filter((x) => x.id !== id));
+      setStatus("Resource deleted.");
+    }
+  }
+
   async function signOut() {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -157,5 +225,9 @@ export default function AdminPage() {
 
   <form className="form-card" onSubmit={saveSettings} style={{marginTop: 24}}><h2>Homepage information</h2><div className="field"><label>Announcement (optional)</label><input value={settings.announcement} onChange={(e)=>setSettings({...settings,announcement:e.target.value})} placeholder="Example: Fall applications are now open!" /></div><div className="field"><label>Homepage introduction</label><textarea value={settings.hero_lead} onChange={(e)=>setSettings({...settings,hero_lead:e.target.value})} /></div><div className="field"><label>About heading</label><input value={settings.about_heading} onChange={(e)=>setSettings({...settings,about_heading:e.target.value})} /></div><div className="field"><label>Fall season details</label><textarea value={settings.fall_details} onChange={(e)=>setSettings({...settings,fall_details:e.target.value})} /></div><div className="field"><label>Spring season details</label><textarea value={settings.spring_details} onChange={(e)=>setSettings({...settings,spring_details:e.target.value})} /></div><div className="field"><label>Contact heading</label><input value={settings.contact_heading} onChange={(e)=>setSettings({...settings,contact_heading:e.target.value})} /></div><div className="field"><label>Contact description</label><textarea value={settings.contact_copy} onChange={(e)=>setSettings({...settings,contact_copy:e.target.value})} /></div><button className="btn btn-primary">Save Homepage</button></form>
 
-  <section className="form-card" style={{marginTop: 24}}><h2>Camp schedule</h2><p className="section-copy">Add activities in the order you want them displayed publicly.</p>{schedule.map((item,index)=><div key={item.id} className="card" style={{marginBottom: 16}}><div className="field-grid"><div className="field"><label>Day</label><input value={item.day_label} onChange={(e)=>setSchedule(schedule.map((x,i)=>i===index?{...x,day_label:e.target.value}:x))} /></div><div className="field"><label>Time</label><input value={item.time_label} onChange={(e)=>setSchedule(schedule.map((x,i)=>i===index?{...x,time_label:e.target.value}:x))} /></div></div><div className="field"><label>Activity</label><input value={item.title} onChange={(e)=>setSchedule(schedule.map((x,i)=>i===index?{...x,title:e.target.value}:x))} /></div><div className="field"><label>Details</label><textarea value={item.details || ""} onChange={(e)=>setSchedule(schedule.map((x,i)=>i===index?{...x,details:e.target.value}:x))} /></div><div className="field"><label>Display order</label><input type="number" value={item.sort_order} onChange={(e)=>setSchedule(schedule.map((x,i)=>i===index?{...x,sort_order:Number(e.target.value)}:x))} /></div><div className="actions"><button className="btn btn-primary" type="button" onClick={()=>saveScheduleItem(item)}>Save Activity</button><button className="btn btn-secondary" type="button" onClick={()=>deleteScheduleItem(item.id)}>Delete</button></div></div>)}<button className="btn btn-secondary" type="button" onClick={addScheduleItem}>+ Add Schedule Activity</button></section>{status && <div className="status" aria-live="polite" style={{marginTop:20}}>{status}</div>}</main></>;
+  <section className="form-card" style={{marginTop: 24}}><h2>Camp schedule</h2><p className="section-copy">Add activities in the order you want them displayed publicly.</p>{schedule.map((item,index)=><div key={item.id} className="card" style={{marginBottom: 16}}><div className="field-grid"><div className="field"><label>Day</label><input value={item.day_label} onChange={(e)=>setSchedule(schedule.map((x,i)=>i===index?{...x,day_label:e.target.value}:x))} /></div><div className="field"><label>Time</label><input value={item.time_label} onChange={(e)=>setSchedule(schedule.map((x,i)=>i===index?{...x,time_label:e.target.value}:x))} /></div></div><div className="field"><label>Activity</label><input value={item.title} onChange={(e)=>setSchedule(schedule.map((x,i)=>i===index?{...x,title:e.target.value}:x))} /></div><div className="field"><label>Details</label><textarea value={item.details || ""} onChange={(e)=>setSchedule(schedule.map((x,i)=>i===index?{...x,details:e.target.value}:x))} /></div><div className="field"><label>Display order</label><input type="number" value={item.sort_order} onChange={(e)=>setSchedule(schedule.map((x,i)=>i===index?{...x,sort_order:Number(e.target.value)}:x))} /></div><div className="actions"><button className="btn btn-primary" type="button" onClick={()=>saveScheduleItem(item)}>Save Activity</button><button className="btn btn-secondary" type="button" onClick={()=>deleteScheduleItem(item.id)}>Delete</button></div></div>)}<button className="btn btn-secondary" type="button" onClick={addScheduleItem}>+ Add Schedule Activity</button></section>
+
+  <section className="form-card" style={{marginTop: 24}}><h2>Resources page</h2><p className="section-copy">Manage the support links shown on the public Resources page. New resources start hidden so you can finish them before publishing.</p>{resources.map((item,index)=><div key={item.id} className="card" style={{marginBottom: 16}}><div className="field-grid"><div className="field"><label>Resource name</label><input value={item.title} onChange={(e)=>setResources(resources.map((x,i)=>i===index?{...x,title:e.target.value}:x))} /></div><div className="field"><label>Category</label><input value={item.category} onChange={(e)=>setResources(resources.map((x,i)=>i===index?{...x,category:e.target.value}:x))} placeholder="Community support" /></div></div><div className="field"><label>Description</label><textarea value={item.description} onChange={(e)=>setResources(resources.map((x,i)=>i===index?{...x,description:e.target.value}:x))} /></div><div className="field"><label>Website URL</label><input type="url" value={item.href} onChange={(e)=>setResources(resources.map((x,i)=>i===index?{...x,href:e.target.value}:x))} placeholder="https://example.org" /></div><div className="field-grid"><div className="field"><label>Button text</label><input value={item.action_label} onChange={(e)=>setResources(resources.map((x,i)=>i===index?{...x,action_label:e.target.value}:x))} placeholder="Learn More" /></div><div className="field"><label>Display order</label><input type="number" value={item.sort_order} onChange={(e)=>setResources(resources.map((x,i)=>i===index?{...x,sort_order:Number(e.target.value)}:x))} /></div></div><label style={{display:"flex",alignItems:"center",gap:10,fontWeight:800,margin:"8px 0 18px",color:"var(--forest)"}}><input style={{width:"auto"}} type="checkbox" checked={item.is_active} onChange={(e)=>setResources(resources.map((x,i)=>i===index?{...x,is_active:e.target.checked}:x))} /> Show publicly</label><div className="actions"><button className="btn btn-primary" type="button" onClick={()=>saveResource(item)}>Save Resource</button><button className="btn btn-secondary" type="button" onClick={()=>deleteResource(item.id)}>Delete</button></div></div>)}<button className="btn btn-secondary" type="button" onClick={addResource}>+ Add Resource</button></section>
+
+  {status && <div className="status" aria-live="polite" style={{marginTop:20}}>{status}</div>}</main></>;
 }
