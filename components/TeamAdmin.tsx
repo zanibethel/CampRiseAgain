@@ -20,10 +20,64 @@ type NewMember = {
 };
 
 const emptyNewMember: NewMember = { name: "", bio: "", image: null, is_visible: true };
+const MAX_PHOTO_DIMENSION = 1400;
+const JPEG_QUALITY = 0.82;
 
-function safeFileName(file: File) {
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+function safeFileName() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function optimizeTeamPhoto(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) throw new Error("Please choose an image file.");
+
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      try {
+        const sourceWidth = image.naturalWidth || image.width;
+        const sourceHeight = image.naturalHeight || image.height;
+        const scale = Math.min(1, MAX_PHOTO_DIMENSION / Math.max(sourceWidth, sourceHeight));
+        const width = Math.max(1, Math.round(sourceWidth * scale));
+        const height = Math.max(1, Math.round(sourceHeight * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Your browser could not prepare this photo.");
+
+        context.drawImage(image, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            URL.revokeObjectURL(objectUrl);
+            if (!blob) {
+              reject(new Error("Your browser could not prepare this photo."));
+              return;
+            }
+            resolve(new File([blob], "team-photo.jpg", { type: "image/jpeg", lastModified: Date.now() }));
+          },
+          "image/jpeg",
+          JPEG_QUALITY,
+        );
+      } catch (error) {
+        URL.revokeObjectURL(objectUrl);
+        reject(error instanceof Error ? error : new Error("Could not prepare this photo."));
+      }
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("That photo format could not be read. Try choosing a JPEG, PNG, or WebP image."));
+    };
+
+    image.src = objectUrl;
+  });
 }
 
 export default function TeamAdmin() {
@@ -50,9 +104,13 @@ export default function TeamAdmin() {
   }, []);
 
   async function uploadImage(file: File) {
-    const path = safeFileName(file);
-    const { error } = await supabase.storage.from("camp-rise-again-team").upload(path, file, {
+    setStatus(`Optimizing photo (${formatBytes(file.size)})…`);
+    const optimized = await optimizeTeamPhoto(file);
+    setStatus(`Uploading optimized photo (${formatBytes(optimized.size)})…`);
+    const path = safeFileName();
+    const { error } = await supabase.storage.from("camp-rise-again-team").upload(path, optimized, {
       cacheControl: "3600",
+      contentType: "image/jpeg",
       upsert: false,
     });
     if (error) throw error;
@@ -125,7 +183,7 @@ export default function TeamAdmin() {
     const file = e.target.files?.[0];
     if (!file) return;
     setSavingId(member.id);
-    setStatus(`Uploading photo for ${member.name}…`);
+    setStatus(`Preparing photo for ${member.name}…`);
     try {
       const newPath = await uploadImage(file);
       const { error } = await supabase.from("camp_rise_again_team_members").update({
@@ -181,9 +239,9 @@ export default function TeamAdmin() {
         <form onSubmit={addMember} style={{ marginTop: 22, paddingTop: 22, borderTop: "1px solid rgba(255,255,255,.12)" }}>
           <div className="field"><label htmlFor="team-name">Name</label><input id="team-name" value={newMember.name} onChange={(e) => setNewMember({ ...newMember, name: e.target.value })} required /></div>
           <div className="field"><label htmlFor="team-bio">Short bio</label><textarea id="team-bio" value={newMember.bio} onChange={(e) => setNewMember({ ...newMember, bio: e.target.value })} /></div>
-          <div className="field"><label htmlFor="team-photo">Photo (optional)</label><input id="team-photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setNewMember({ ...newMember, image: e.target.files?.[0] || null })} /></div>
+          <div className="field"><label htmlFor="team-photo">Photo (optional)</label><input id="team-photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setNewMember({ ...newMember, image: e.target.files?.[0] || null })} />{newMember.image && <small style={{ display: "block", marginTop: 8, opacity: .72 }}>Selected: {newMember.image.name} · {formatBytes(newMember.image.size)}. It will be optimized automatically before upload.</small>}</div>
           <label style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 18 }}><input type="checkbox" checked={newMember.is_visible} onChange={(e) => setNewMember({ ...newMember, is_visible: e.target.checked })} /> Show this person on the homepage</label>
-          <button className="btn btn-primary" disabled={adding}>{adding ? "Adding…" : "Add Team Member"}</button>
+          <button className="btn btn-primary" disabled={adding}>{adding ? "Uploading…" : "Add Team Member"}</button>
         </form>
       )}
 
