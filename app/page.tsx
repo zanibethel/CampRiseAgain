@@ -1,15 +1,15 @@
-import Image from "next/image";
 import Link from "next/link";
 import SiteHeader from "@/components/SiteHeader";
 import DonateButton from "@/components/DonateButton";
 import TeamSection from "@/components/TeamSection";
+import ManagedLogo from "@/components/ManagedLogo";
 
 export default function Home() {
   return (
     <>
       <SiteHeader />
       <main>
-        <section className="hero">
+        <section id="hero" data-home-section="hero" className="hero">
           <div className="hero-inner">
             <div>
               <div className="eyebrow">Camp Rise Again</div>
@@ -23,83 +23,52 @@ export default function Home() {
               </div>
             </div>
             <div className="logo-card">
-              <Image src="/3426A745-DDB8-4CB7-8BBC-9DC68C16B20A.png" alt="Camp Rise Again mountain and river logo" width={800} height={800} priority />
+              <ManagedLogo width={800} height={800} priority />
             </div>
           </div>
         </section>
 
-        <section id="about" className="section">
+        <section id="about" data-home-section="about" className="section">
           <div className="eyebrow">About the camp</div>
           <h2>A safe, supportive place to reconnect with life and with others.</h2>
-          <div className="section-copy">
-            <p>
-              Our goal is to provide a safe, supportive environment where participants can step away from the weight of everyday life, connect with people who understand, and experience moments of joy, laughter, connection, and hope.
-            </p>
-            <p>
-              Through outdoor activities, recreation, group conversations, wellness experiences, and supportive community, Camp Rise Again creates space for people to breathe, be seen, and remember that their lives have value.
-            </p>
-            <p>
-              This isn’t about pretending everything is okay. It’s about creating a space where you don’t have to pretend.
-            </p>
-            <p>
-              Camp Rise Again is a community of people choosing to take another step forward—together.
-            </p>
+          <div className="section-copy" data-managed-about-copy>
+            <p>Our goal is to provide a safe, supportive environment where participants can step away from the weight of everyday life, connect with people who understand, and experience moments of joy, laughter, connection, and hope.</p>
+            <p>Through outdoor activities, recreation, group conversations, wellness experiences, and supportive community, Camp Rise Again creates space for people to breathe, be seen, and remember that their lives have value.</p>
+            <p>This isn’t about pretending everything is okay. It’s about creating a space where you don’t have to pretend.</p>
+            <p>Camp Rise Again is a community of people choosing to take another step forward—together.</p>
           </div>
 
           <div className="cards">
-            <div className="card">
-              <h3>Fall Season</h3>
-              <p>Fall camp details, dates, location, and capacity will be added here.</p>
-            </div>
-            <div className="card">
-              <h3>Spring Season</h3>
-              <p>Spring camp details, dates, location, and capacity will be added here.</p>
-            </div>
-            <div className="card">
-              <h3>Volunteer With Us</h3>
-              <p>Support food service, activities, transportation, camp mentoring, setup, and more.</p>
-            </div>
+            <div className="card"><h3>Fall Season</h3><p>Fall camp details, dates, location, and capacity will be added here.</p></div>
+            <div className="card"><h3>Spring Season</h3><p>Spring camp details, dates, location, and capacity will be added here.</p></div>
+            <div className="card"><h3>Volunteer With Us</h3><p>Support food service, activities, transportation, camp mentoring, setup, and more.</p></div>
           </div>
         </section>
 
-        <TeamSection />
+        <div data-home-section="team"><TeamSection /></div>
 
-        <section className="section">
+        <section id="keep-going" data-home-section="keep-going" className="section">
           <div className="eyebrow">Keep going</div>
           <h2>Your story isn’t over.</h2>
-          <p className="section-copy">
-            There is still hope.<br />
-            You can rise again.
-          </p>
+          <p className="section-copy">There is still hope.<br />You can rise again.</p>
         </section>
 
-        <section id="donate" className="section">
+        <section id="donate" data-home-section="donate" className="section">
           <div className="eyebrow">Support the mission</div>
           <h2>Help make Camp Rise Again possible.</h2>
-          <p className="section-copy">
-            Every contribution helps us continue building a welcoming, supportive camp experience for adults who are struggling with depression. Visit our GoFundMe to donate and see the latest fundraising progress.
-          </p>
-          <div className="actions">
-            <DonateButton />
-          </div>
+          <p className="section-copy">Every contribution helps us continue building a welcoming, supportive camp experience for adults who are struggling with depression. Visit our GoFundMe to donate and see the latest fundraising progress.</p>
+          <div className="actions"><DonateButton /></div>
         </section>
 
-        <section id="contact" className="section">
+        <section id="contact" data-home-section="contact" className="section">
           <div className="eyebrow">Contact</div>
           <h2>Questions before you apply?</h2>
-          <p className="section-copy">Send us a message and your email app will open with your answers already included so you can review and send it directly.</p>
-          <div className="actions">
-            <Link className="btn btn-primary" href="/contact">Contact Us</Link>
-          </div>
+          <p className="section-copy" data-managed-contact-copy>Send us a message and your email app will open with your answers already included so you can review and send it directly.</p>
+          <div className="actions"><Link className="btn btn-primary" href="/contact">Contact Us</Link></div>
           <p className="section-copy"><strong>Camp Rise Again is not a crisis service.</strong> If you or someone else is in immediate danger, call 911. In the U.S., you can also call or text 988 for the Suicide & Crisis Lifeline.</p>
         </section>
       </main>
-      <footer>
-        <div className="footer-inner">
-          <strong>Camp Rise Again</strong>
-          <span>Camp Rise Again</span>
-        </div>
-      </footer>
+      <footer><div className="footer-inner"><strong>Camp Rise Again</strong><span>Camp Rise Again</span></div></footer>
     </>
   );
 }
