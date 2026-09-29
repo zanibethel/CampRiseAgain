@@ -1,0 +1,7 @@
+alter table public.camp_rise_again_site_settings
+  add column if not exists hero_heading text not null default 'You don’t have to walk through the darkness alone.',
+  add column if not exists about_copy text not null default 'Our goal is to provide a safe, supportive environment where participants can step away from the weight of everyday life, connect with people who understand, and experience moments of joy, laughter, connection, and hope.\n\nThrough outdoor activities, recreation, group conversations, wellness experiences, and supportive community, Camp Rise Again creates space for people to breathe, be seen, and remember that their lives have value.\n\nThis isn’t about pretending everything is okay. It’s about creating a space where you don’t have to pretend.\n\nCamp Rise Again is a community of people choosing to take another step forward—together.',
+  add column if not exists keep_going_heading text not null default 'Your story isn’t over.',
+  add column if not exists keep_going_copy text not null default 'There is still hope.\nYou can rise again.',
+  add column if not exists donate_heading text not null default 'Help make Camp Rise Again possible.',
+  add column if not exists donate_copy text not null default 'Every contribution helps us continue building a welcoming, supportive camp experience for adults who are struggling with depression. Visit our GoFundMe to donate and see the latest fundraising progress.';
