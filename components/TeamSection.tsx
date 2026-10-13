@@ -5,6 +5,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type TeamMember = {
   id: number;
+  title: string;
   name: string;
   bio: string;
   image_path: string;
@@ -18,7 +19,7 @@ export default function TeamSection() {
   useEffect(() => {
     supabase
       .from("camp_rise_again_team_members")
-      .select("id,name,bio,image_path,sort_order")
+      .select("id,title,name,bio,image_path,sort_order")
       .eq("is_visible", true)
       .order("sort_order")
       .order("id")
@@ -47,6 +48,7 @@ export default function TeamSection() {
                   style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", borderRadius: 14, marginBottom: 16 }}
                 />
               )}
+              {member.title?.trim() && <strong className="team-member-title">{member.title}</strong>}
               <h3>{member.name}</h3>
               {member.bio && <p>{member.bio}</p>}
             </article>
