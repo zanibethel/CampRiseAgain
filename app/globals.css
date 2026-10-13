@@ -119,3 +119,14 @@ input[type="checkbox"], input[type="radio"] {
   .card { padding: 18px 14px; }
   .team-member-layout.has-photo { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Optional team role displayed above each member's name. */
+.team-member-title {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.35;
+  color: var(--forest-2);
+  overflow-wrap: anywhere;
+}

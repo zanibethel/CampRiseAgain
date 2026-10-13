@@ -18,3 +18,7 @@ As of 2026-09-29, the Camp Rise Again migration history covers:
 - editable homepage copy fields
 
 Do not manually rerun these migrations against the existing production project. They are source-of-truth history for reproducible environments and future Supabase CLI reconciliation.
+
+## October 13, 2026 update
+
+- `20261013174554_camp_rise_again_team_member_title.sql` adds an optional, empty-by-default `title` field for staff profiles. The field is displayed in bold above a member's name and preserves all existing records.
