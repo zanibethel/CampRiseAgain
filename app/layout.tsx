@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import AdminGoFundMeGate from "@/components/AdminGoFundMeGate";
-import AdminTeamGate from "@/components/AdminTeamGate";
 
 export const metadata: Metadata = {
   title: "Camp Rise Again",
@@ -13,8 +11,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         {children}
-        <AdminGoFundMeGate />
-        <AdminTeamGate />
       </body>
     </html>
   );
