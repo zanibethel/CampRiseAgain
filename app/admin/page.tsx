@@ -31,34 +31,64 @@ export default function AdminPage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Never await Supabase requests from inside onAuthStateChange: the auth
-  // event is emitted while the SDK holds its auth lock. A database request
-  // inside that callback can block session initialization indefinitely.
+  // Recover a session (including the result of an email-link redirect)
+  // before subscribing to auth changes. Subscribing while the SDK is still
+  // initializing caused indefinite hangs on mobile in older auth-js builds.
   useEffect(() => {
-    if (!supabase) { setLoading(false); return; }
-
     let active = true;
+    let unsubscribe: (() => void) | undefined;
     const timeout = window.setTimeout(() => {
       if (!active) return;
       setLoading(false);
-      setStatus("Sign-in is taking longer than expected. Try opening this page in Safari and signing in again.");
-    }, 10000);
+      setStatus("We could not finish checking your sign-in. Use Reset Sign-In below, then request a new link.");
+    }, 12000);
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!active) return;
-      const current = session?.user?.email?.toLowerCase() || "";
-      setUserEmail(ADMINS.includes(current) ? current : "");
-      setLoading(false);
-      window.clearTimeout(timeout);
-      if (event === "SIGNED_IN") setStatus("");
-    });
+    async function initializeAuth() {
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (!active) return;
+        const current = data.user?.email?.toLowerCase() || "";
+        setUserEmail(ADMINS.includes(current) ? current : "");
+        if (error && error.name !== "AuthSessionMissingError") {
+          setStatus("Your sign-in could not be restored. Try a fresh email sign-in link.");
+        } else {
+          setStatus("");
+        }
+      } catch {
+        if (active) setStatus("Your sign-in could not be restored. Try resetting the sign-in session.");
+      } finally {
+        if (!active) return;
+        window.clearTimeout(timeout);
+        setLoading(false);
 
+        // Do not perform async requests inside this callback.
+        const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+          if (!active) return;
+          const current = session?.user?.email?.toLowerCase() || "";
+          setUserEmail(ADMINS.includes(current) ? current : "");
+        });
+        unsubscribe = () => data.subscription.unsubscribe();
+      }
+    }
+
+    void initializeAuth();
     return () => {
       active = false;
       window.clearTimeout(timeout);
-      listener.subscription.unsubscribe();
+      unsubscribe?.();
     };
   }, [supabase]);
+
+  function resetSignIn() {
+    // Clear only this site's own browser session; never touch the shared
+    // Supabase project's users, tokens on other devices, or team records.
+    try {
+      window.localStorage.removeItem("sb-yufptpfiwdbzzrvhkvux-auth-token");
+    } catch {
+      // A blocked localStorage is not a reason to trap the admin on this page.
+    }
+    window.location.assign("/admin");
+  }
 
   // Run database queries in a separate effect, after the synchronous auth
   // callback has returned. RLS still verifies every operation server-side.
@@ -99,8 +129,18 @@ export default function AdminPage() {
       return;
     }
     setStatus("Sending secure sign-in link…");
-    const { error } = await supabase.auth.signInWithOtp({ email: normalized, options: { emailRedirectTo: `${window.location.origin}/admin`, shouldCreateUser: true } });
-    setStatus(error ? error.message : "Check your email for the secure Camp Rise Again sign-in link.");
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: normalized,
+        options: {
+          emailRedirectTo: `${window.location.origin}/admin`,
+          shouldCreateUser: false,
+        },
+      });
+      setStatus(error ? error.message : "Check your email for the newest sign-in link. It works once, and must open in the same browser where you'll use Admin.");
+    } catch {
+      setStatus("Could not request a sign-in link. Reset Sign-In and try again.");
+    }
   }
 
   async function addResource() {
@@ -165,7 +205,7 @@ export default function AdminPage() {
   if (loading) return <><SiteHeader /><main className="form-wrap"><p>Loading admin…</p></main></>;
 
   if (!userEmail) {
-    return <><SiteHeader /><main className="form-wrap"><div className="eyebrow">Administration</div><h1>Camp Rise Again Admin</h1><p className="section-copy">Authorized administrators can sign in with a secure link sent to their email address.</p><form className="form-card" onSubmit={sendLogin}><div className="field"><label htmlFor="email">Admin email</label><input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div><button className="btn btn-primary">Email Me a Sign-In Link</button>{status && <div className="status" aria-live="polite">{status}</div>}</form></main></>;
+    return <><SiteHeader /><main className="form-wrap"><div className="eyebrow">Administration</div><h1>Camp Rise Again Admin</h1><p className="section-copy">Authorized administrators can sign in with a secure link sent to their email address.</p><form className="form-card" onSubmit={sendLogin}><div className="field"><label htmlFor="email">Admin email</label><input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div><button className="btn btn-primary">Email Me a Sign-In Link</button>{status && <div className="status" role="status" aria-live="polite">{status}</div>}<div className="actions" style={{ marginTop: 12 }}><button className="btn btn-secondary" type="button" onClick={resetSignIn}>Reset Sign-In</button></div><p className="section-copy" style={{ fontSize: 14, marginBottom: 0 }}>If the email opens inside Gmail or another app, open the link in your regular browser. Old links cannot be reused.</p></form></main></>;
   }
 
   const tabs: { id: AdminSection; label: string; description: string }[] = [
