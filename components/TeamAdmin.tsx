@@ -5,6 +5,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type TeamMember = {
   id: number;
+  title: string;
   name: string;
   bio: string;
   image_path: string;
@@ -13,13 +14,14 @@ type TeamMember = {
 };
 
 type NewMember = {
+  title: string;
   name: string;
   bio: string;
   image: File | null;
   is_visible: boolean;
 };
 
-const emptyNewMember: NewMember = { name: "", bio: "", image: null, is_visible: true };
+const emptyNewMember: NewMember = { title: "", name: "", bio: "", image: null, is_visible: true };
 const MAX_PHOTO_DIMENSION = 1400;
 const JPEG_QUALITY = 0.82;
 
@@ -97,7 +99,7 @@ export default function TeamAdmin() {
     try {
       const { data, error } = await supabase
         .from("camp_rise_again_team_members")
-        .select("id,name,bio,image_path,is_visible,sort_order")
+        .select("id,title,name,bio,image_path,is_visible,sort_order")
         .order("sort_order")
         .order("id");
       if (error) throw error;
@@ -137,6 +139,7 @@ export default function TeamAdmin() {
       if (newMember.image) imagePath = await uploadImage(newMember.image);
       const nextOrder = members.length ? Math.max(...members.map((m) => m.sort_order)) + 10 : 10;
       const { error } = await supabase.from("camp_rise_again_team_members").insert({
+        title: newMember.title.trim(),
         name: newMember.name.trim(),
         bio: newMember.bio.trim(),
         image_path: imagePath,
@@ -164,6 +167,7 @@ export default function TeamAdmin() {
     setSavingId(member.id);
     setStatus(`Saving ${member.name}…`);
     const { error } = await supabase.from("camp_rise_again_team_members").update({
+      title: member.title.trim(),
       name: member.name.trim(),
       bio: member.bio.trim(),
       is_visible: member.is_visible,
@@ -247,6 +251,7 @@ export default function TeamAdmin() {
 
       {showAddForm && (
         <form onSubmit={addMember} style={{ marginTop: 22, paddingTop: 22, borderTop: "1px solid rgba(255,255,255,.12)" }}>
+          <div className="field"><label htmlFor="team-title">Title (optional)</label><input id="team-title" maxLength={120} placeholder="e.g. Camp Director" value={newMember.title} onChange={(e) => setNewMember({ ...newMember, title: e.target.value })} /></div>
           <div className="field"><label htmlFor="team-name">Name</label><input id="team-name" value={newMember.name} onChange={(e) => setNewMember({ ...newMember, name: e.target.value })} required /></div>
           <div className="field"><label htmlFor="team-bio">Short bio</label><textarea id="team-bio" value={newMember.bio} onChange={(e) => setNewMember({ ...newMember, bio: e.target.value })} /></div>
           <div className="field"><label htmlFor="team-photo">Photo (optional)</label><input id="team-photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setNewMember({ ...newMember, image: e.target.files?.[0] || null })} />{newMember.image && <small style={{ display: "block", marginTop: 8, opacity: .72 }}>Selected: {newMember.image.name} · {formatBytes(newMember.image.size)}. It will be optimized automatically before upload.</small>}</div>
@@ -272,6 +277,7 @@ export default function TeamAdmin() {
               <div className={imageUrl ? "team-member-layout has-photo" : "team-member-layout"}>
                 {imageUrl && <img src={imageUrl} alt={member.name} style={{ width: 110, height: 110, borderRadius: 14, objectFit: "cover" }} />}
                 <div style={{ minWidth: 0 }}>
+                  <div className="field"><label>Title (optional)</label><input maxLength={120} placeholder="e.g. Camp Director" value={member.title} onChange={(e) => updateLocal(member.id, { title: e.target.value })} /></div>
                   <div className="field"><label>Name</label><input value={member.name} onChange={(e) => updateLocal(member.id, { name: e.target.value })} /></div>
                   <div className="field"><label>Bio</label><textarea value={member.bio} onChange={(e) => updateLocal(member.id, { bio: e.target.value })} /></div>
                   <div className="field-grid">
