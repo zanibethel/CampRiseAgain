@@ -88,19 +88,29 @@ export default function TeamAdmin() {
   const [status, setStatus] = useState("");
   const [savingId, setSavingId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   async function loadMembers() {
-    const { data, error } = await supabase
-      .from("camp_rise_again_team_members")
-      .select("id,name,bio,image_path,is_visible,sort_order")
-      .order("sort_order")
-      .order("id");
-    if (error) setStatus(error.message);
-    else setMembers((data || []) as TeamMember[]);
+    setLoadingMembers(true);
+    setLoadError("");
+    try {
+      const { data, error } = await supabase
+        .from("camp_rise_again_team_members")
+        .select("id,name,bio,image_path,is_visible,sort_order")
+        .order("sort_order")
+        .order("id");
+      if (error) throw error;
+      setMembers((data || []) as TeamMember[]);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Could not load team members.");
+    } finally {
+      setLoadingMembers(false);
+    }
   }
 
   useEffect(() => {
-    loadMembers();
+    void loadMembers();
   }, []);
 
   async function uploadImage(file: File) {
@@ -240,20 +250,28 @@ export default function TeamAdmin() {
           <div className="field"><label htmlFor="team-name">Name</label><input id="team-name" value={newMember.name} onChange={(e) => setNewMember({ ...newMember, name: e.target.value })} required /></div>
           <div className="field"><label htmlFor="team-bio">Short bio</label><textarea id="team-bio" value={newMember.bio} onChange={(e) => setNewMember({ ...newMember, bio: e.target.value })} /></div>
           <div className="field"><label htmlFor="team-photo">Photo (optional)</label><input id="team-photo" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => setNewMember({ ...newMember, image: e.target.files?.[0] || null })} />{newMember.image && <small style={{ display: "block", marginTop: 8, opacity: .72 }}>Selected: {newMember.image.name} · {formatBytes(newMember.image.size)}. It will be optimized automatically before upload.</small>}</div>
-          <label style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 18 }}><input type="checkbox" checked={newMember.is_visible} onChange={(e) => setNewMember({ ...newMember, is_visible: e.target.checked })} /> Show this person on the homepage</label>
+          <label className="team-visibility-toggle"><input type="checkbox" checked={newMember.is_visible} onChange={(e) => setNewMember({ ...newMember, is_visible: e.target.checked })} /><span>Show this person on the homepage</span></label>
           <button className="btn btn-primary" disabled={adding}>{adding ? "Uploading…" : "Add Team Member"}</button>
         </form>
       )}
 
       <div style={{ marginTop: 24 }}>
-        {members.length === 0 && <div className="notice">No team members yet. Use “Add Team Member” to create the first profile.</div>}
-        {members.map((member) => {
+        <div className="team-list-header">
+          <h3>Current team members {!loadingMembers && !loadError ? `(${members.length})` : ""}</h3>
+          <button className="btn btn-secondary" type="button" onClick={() => void loadMembers()} disabled={loadingMembers}>
+            {loadingMembers ? "Loading…" : "Refresh List"}
+          </button>
+        </div>
+        {loadingMembers && <p className="section-copy" role="status">Loading team members…</p>}
+        {loadError && <div className="notice" role="alert">Could not load team members: {loadError}. Select Refresh List to try again.</div>}
+        {!loadingMembers && !loadError && members.length === 0 && <div className="notice">No team members yet. Use “Add Team Member” to create the first profile.</div>}
+        {!loadingMembers && !loadError && members.map((member) => {
           const imageUrl = publicImageUrl(member.image_path);
           return (
             <div className="card" key={member.id} style={{ marginBottom: 18 }}>
-              <div style={{ display: "grid", gridTemplateColumns: imageUrl ? "110px 1fr" : "1fr", gap: 18, alignItems: "start" }}>
+              <div className={imageUrl ? "team-member-layout has-photo" : "team-member-layout"}>
                 {imageUrl && <img src={imageUrl} alt={member.name} style={{ width: 110, height: 110, borderRadius: 14, objectFit: "cover" }} />}
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <div className="field"><label>Name</label><input value={member.name} onChange={(e) => updateLocal(member.id, { name: e.target.value })} /></div>
                   <div className="field"><label>Bio</label><textarea value={member.bio} onChange={(e) => updateLocal(member.id, { bio: e.target.value })} /></div>
                   <div className="field-grid">
