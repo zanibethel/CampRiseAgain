@@ -31,36 +31,64 @@ export default function AdminPage() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
 
-  async function loadResources() {
-    if (!supabase) return;
-    const { data } = await supabase.from("resources").select("*").order("sort_order").order("id");
-    if (data) setResources(data as ResourceItem[]);
-  }
-
+  // Never await Supabase requests from inside onAuthStateChange: the auth
+  // event is emitted while the SDK holds its auth lock. A database request
+  // inside that callback can block session initialization indefinitely.
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
-    supabase.auth.getUser().then(async ({ data }) => {
-      const current = data.user?.email?.toLowerCase() || "";
-      if (current && ADMINS.includes(current)) {
-        setUserEmail(current);
-        await loadResources();
-      } else if (data.user) {
-        await supabase.auth.signOut();
-      }
+
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      if (!active) return;
       setLoading(false);
+      setStatus("Sign-in is taking longer than expected. Try opening this page in Safari and signing in again.");
+    }, 10000);
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      const current = session?.user?.email?.toLowerCase() || "";
+      setUserEmail(ADMINS.includes(current) ? current : "");
+      setLoading(false);
+      window.clearTimeout(timeout);
+      if (event === "SIGNED_IN") setStatus("");
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const current = session?.user?.email?.toLowerCase() || "";
-      if (current && ADMINS.includes(current)) {
-        setUserEmail(current);
-        await loadResources();
-      } else {
-        setUserEmail("");
-      }
-    });
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+      listener.subscription.unsubscribe();
+    };
   }, [supabase]);
+
+  // Run database queries in a separate effect, after the synchronous auth
+  // callback has returned. RLS still verifies every operation server-side.
+  useEffect(() => {
+    if (!supabase || !userEmail) {
+      setResources([]);
+      return;
+    }
+
+    let active = true;
+    async function loadResources() {
+      try {
+        const { data, error } = await supabase
+          .from("resources")
+          .select("*")
+          .order("sort_order")
+          .order("id");
+        if (!active) return;
+        if (error) throw error;
+        setResources((data || []) as ResourceItem[]);
+      } catch (error) {
+        if (!active) return;
+        const message = error instanceof Error ? error.message : "Unknown error";
+        setStatus(`Resources could not load: ${message}`);
+      }
+    }
+
+    void loadResources();
+    return () => { active = false; };
+  }, [supabase, userEmail]);
 
   async function sendLogin(e: FormEvent) {
     e.preventDefault();
