@@ -128,7 +128,7 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
         <div className="memorial-honors">
           <div className="eyebrow">Military service</div>
           <h2>Honors and decorations</h2>
-          <p>Military decorations listed in Michael’s published obituary:</p>
+          <p>Michael's military decorations include:</p>
           <ul>{memorial.honors.split("\n").map((honor, index) => honor.trim() && <li key={index}>{honor.trim()}</li>)}</ul>
         </div>
 
