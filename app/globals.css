@@ -248,6 +248,7 @@ input[type="checkbox"], input[type="radio"] {
   transition: transform 750ms cubic-bezier(.22, 1, .36, 1);
   will-change: transform;
 }
+.memorial-carousel-track.memorial-carousel-no-transition { transition: none !important; }
 .memorial-carousel-slide {
   flex: 0 0 100%;
   width: 100%;
