@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { defaultMemorial, type MemorialContent } from "@/lib/memorial";
+import { defaultMemorial, type MemorialContent, type MemorialPhotoPlacement } from "@/lib/memorial";
 import { michaelPhotoDataUrl } from "@/lib/michael-portrait";
 
 export default function MemorialSection({ variant }: { variant: "home" | "page" }) {
@@ -28,6 +28,29 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
     : michaelPhotoDataUrl;
 
   useEffect(() => { setImageFailed(false); }, [photoUrl]);
+
+  const galleryPhotos = Array.isArray(memorial.photos) ? memorial.photos : [];
+
+  function photosAt(placement: MemorialPhotoPlacement) {
+    const images = galleryPhotos.filter((photo) => photo && photo.placement === placement && photo.visible !== false && typeof photo.path === "string" && photo.path.length > 0);
+    if (!images.length || !supabase) return null;
+    const countClass = images.length === 1 ? " memorial-photo-strip-single" : images.length === 2 ? " memorial-photo-strip-pair" : "";
+    return (
+      <div className={`memorial-photo-strip${countClass}`} aria-label="Memories of Michael">
+        {images.map((photo) => {
+          const url = supabase.storage.from("camp-rise-again-branding").getPublicUrl(photo.path).data.publicUrl;
+          return (
+            <figure className="memorial-memory-photo" key={photo.id || photo.path}>
+              <a href={url} target="_blank" rel="noopener noreferrer" aria-label={photo.caption?.trim() ? `View photo: ${photo.caption}` : "View memorial photo in full size"}>
+                <img src={url} alt={photo.caption?.trim() || "Photo of Michael shared by his family"} loading="lazy" decoding="async" />
+              </a>
+              {photo.caption?.trim() && <figcaption>{photo.caption}</figcaption>}
+            </figure>
+          );
+        })}
+      </div>
+    );
+  }
 
   const portrait = (
     <div className="memorial-photo-wrap">
@@ -82,14 +105,28 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
           <div className="memorial-prose">
             <h2>A life of service. A lasting legacy.</h2>
             <p>{memorial.intro}</p>
-            <h2>Beyond the Uniform</h2>
-            {memorial.personal_story.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
-            <h2>Why Camp Rise Again Exists</h2>
-            <p>{memorial.tierra_story}</p>
-            <h2>Michael’s Legacy</h2>
-            <p>{memorial.legacy}</p>
           </div>
         </div>
+
+        {photosAt("after-service")}
+
+        <section className="memorial-prose memorial-story-chapter" aria-labelledby="memorial-personal-title">
+          <h2 id="memorial-personal-title">Beyond the Uniform</h2>
+          {memorial.personal_story.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+        </section>
+        {photosAt("after-personal")}
+
+        <section className="memorial-prose memorial-story-chapter" aria-labelledby="memorial-founder-title">
+          <h2 id="memorial-founder-title">Why Camp Rise Again Exists</h2>
+          <p>{memorial.tierra_story}</p>
+        </section>
+        {photosAt("after-founder")}
+
+        <section className="memorial-prose memorial-story-chapter" aria-labelledby="memorial-legacy-title">
+          <h2 id="memorial-legacy-title">Michael’s Legacy</h2>
+          <p>{memorial.legacy}</p>
+        </section>
+        {photosAt("after-legacy")}
 
         <div className="memorial-honors">
           <div className="eyebrow">Military service</div>
@@ -97,6 +134,8 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
           <p>Michael's service was recognized through military honors and decorations.</p>
           <ul>{memorial.honors.split("\n").map((honor, index) => honor.trim() && <li key={index}>{honor.trim()}</li>)}</ul>
         </div>
+
+        {photosAt("after-honors")}
 
         <div className="memorial-closing">
           <blockquote>“{memorial.quote}”</blockquote>
