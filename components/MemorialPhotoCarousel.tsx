@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type TouchEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type TouchEvent, type TransitionEvent } from "react";
 
 export type CarouselPhoto = {
   id: string;
@@ -18,6 +18,8 @@ const AUTOPLAY_MS = 8000;
 export default function MemorialPhotoCarousel({ photos, label }: Props) {
   const regionId = useId();
   const [active, setActive] = useState(0);
+  const [position, setPosition] = useState(1);
+  const [snapping, setSnapping] = useState(false);
   const [paused, setPaused] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -33,6 +35,13 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
 
   const count = photos.length;
   const current = photos[Math.min(active, count - 1)];
+  const slides = count > 1
+    ? [
+        { photo: photos[count - 1], photoIndex: count - 1, key: "leading-copy" },
+        ...photos.map((photo, photoIndex) => ({ photo, photoIndex, key: photo.id })),
+        { photo: photos[0], photoIndex: 0, key: "trailing-copy" },
+      ]
+    : photos.map((photo, photoIndex) => ({ photo, photoIndex, key: photo.id }));
   const autoRunning = count > 1 && !paused && !hovered && !focused && inView &&
     tabVisible && !reducedMotion && !lightboxOpen;
 
@@ -63,11 +72,15 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
 
   useEffect(() => {
     setActive((index) => Math.min(index, Math.max(0, count - 1)));
+    setPosition(count > 1 ? 1 : 0);
   }, [count]);
 
   useEffect(() => {
     if (!autoRunning) return;
-    const interval = window.setInterval(() => setActive((index) => (index + 1) % count), AUTOPLAY_MS);
+    const interval = window.setInterval(() => {
+      setActive((index) => (index + 1) % count);
+      setPosition((index) => index + 1);
+    }, AUTOPLAY_MS);
     return () => window.clearInterval(interval);
   }, [autoRunning, count]);
 
@@ -83,16 +96,41 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
         event.preventDefault();
-        setActive((index) => (index + (event.key === "ArrowRight" ? 1 : count - 1)) % count);
+        select(active + (event.key === "ArrowRight" ? 1 : -1));
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [lightboxOpen, count]);
+  }, [lightboxOpen, count, active, reducedMotion]);
 
   function select(index: number) {
+    if (count < 2) return;
     setPaused(true);
-    setActive((index + count) % count);
+    const next = (index + count) % count;
+    if (next === active) return;
+    if (next === (active + 1) % count) {
+      setActive(next);
+      setPosition((old) => reducedMotion && old === count ? 1 : old + 1);
+    } else if (next === (active - 1 + count) % count) {
+      setActive(next);
+      setPosition((old) => reducedMotion && old === 1 ? count : old - 1);
+    } else {
+      // Non-adjacent dot selection jumps directly rather than racing past many photos.
+      setSnapping(true);
+      setActive(next);
+      setPosition(next + 1);
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => setSnapping(false)));
+    }
+  }
+
+  function finishSlide(event: TransitionEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget || event.propertyName !== "transform") return;
+    if (position === 0 || position === count + 1) {
+      // Duplicate end slides make the last/first transition seamless.
+      setSnapping(true);
+      setPosition(position === 0 ? count : 1);
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => setSnapping(false)));
+    }
   }
 
   function onKeys(event: KeyboardEvent<HTMLDivElement>) {
@@ -118,7 +156,7 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
     select(active + (dx < 0 ? 1 : -1));
   }
 
-  function openLightbox(event: React.MouseEvent<HTMLButtonElement>) {
+  function openLightbox(event: MouseEvent<HTMLButtonElement>) {
     if (ignoreClick.current) { event.preventDefault(); return; }
     triggerRef.current = event.currentTarget;
     setPaused(true);
@@ -154,23 +192,24 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
         onTouchCancel={() => { touchStart.current = null; }}
       >
         <div
-          className="memorial-carousel-track"
-          style={{ transform: `translate3d(-${active * 100}%, 0, 0)` }}
+          className={`memorial-carousel-track${snapping ? " memorial-carousel-no-transition" : ""}`}
+          style={{ transform: `translate3d(-${(count > 1 ? position : 0) * 100}%, 0, 0)` }}
+          onTransitionEnd={finishSlide}
         >
-          {photos.map((photo, index) => (
-            <figure className="memorial-carousel-slide" key={photo.id} aria-hidden={index !== active}>
+          {slides.map(({ photo, photoIndex, key }, slidePosition) => (
+            <figure className="memorial-carousel-slide" key={key} aria-hidden={slidePosition !== (count > 1 ? position : 0)}>
               <button
                 type="button"
-                tabIndex={index === active ? 0 : -1}
+                tabIndex={slidePosition === (count > 1 ? position : 0) ? 0 : -1}
                 className="memorial-carousel-image-button"
                 onClick={openLightbox}
-                aria-label={`Enlarge photograph ${index + 1} of ${count}`}
+                aria-label={`Enlarge photograph ${photoIndex + 1} of ${count}`}
               >
                 <img
                   src={photo.src}
                   className="memorial-carousel-image"
-                  alt={imageAlt(photo, index)}
-                  loading={index <= 1 ? "eager" : "lazy"}
+                  alt={imageAlt(photo, photoIndex)}
+                  loading={photoIndex <= 1 ? "eager" : "lazy"}
                   decoding="async"
                 />
                 <span className="memorial-carousel-enlarge" aria-hidden="true">View larger ↗</span>
