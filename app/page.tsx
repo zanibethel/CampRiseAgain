@@ -41,7 +41,7 @@ export default function Home() {
           </div>
 
           <div className="cards">
-            <div className="card"><h3>Fall Season</h3><p>Fall camp details, dates, location, and capacity will be added here.</p></div>
+            <div className="card"><h3>Fall Season</h3><p>November 6, 2026 · Austin, Texas. Camp Rise Again's peer-support fall gathering will feature planned activities including skydiving, horseback riding, paddleboarding, fishing, relay races, games, and glow-in-the-dark capture the flag. Exact venue and arrival details will be shared privately with confirmed participants. Activities are subject to weather and safety considerations.</p></div>
             <div className="card"><h3>Spring Season</h3><p>Spring camp details, dates, location, and capacity will be added here.</p></div>
             <div className="card"><h3>Volunteer With Us</h3><p>Support food service, activities, transportation, camp mentoring, setup, and more.</p></div>
           </div>
