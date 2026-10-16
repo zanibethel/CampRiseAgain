@@ -632,3 +632,37 @@ header { z-index: 30; }
   header .brand img { width: 36px; height: 36px; }
   header .brand { gap: 7px; }
 }
+
+/* Camp Rise Again admin: password and magic-link options */
+.admin-login-card { max-width: 720px; }
+.admin-login-card h2 { margin: 0 0 18px; font-size: clamp(24px, 4vw, 30px); }
+.admin-login-card .field input { width: 100%; }
+.admin-password-field { display: flex; align-items: stretch; gap: 8px; }
+.admin-password-field input { min-width: 0; flex: 1 1 auto; }
+.admin-show-password {
+  flex: 0 0 auto; padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px; background: #f1f6f2;
+  color: var(--forest); font-weight: 700; cursor: pointer;
+}
+.admin-login-forgot { display: flex; justify-content: flex-end; margin: -4px 0 20px; }
+.admin-login-forgot button {
+  padding: 5px 0; color: #175e48; text-decoration: underline;
+  font-weight: 700; background: none; border: 0; cursor: pointer;
+}
+.admin-login-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 15px 0; }
+.admin-login-actions .btn { min-height: 46px; }
+.admin-login-or { color: #597267; font-size: 14px; font-weight: 700; }
+.admin-login-footer { padding-top: 15px; margin-top: 18px; border-top: 1px solid #dce8e1; }
+.admin-login-footer .btn { margin-bottom: 10px; }
+.admin-login-hint { font-size: 14px; line-height: 1.65; margin: 16px 0 0; }
+.admin-recovery-page { max-width: 760px; }
+.admin-recovery-page .form-card { max-width: 690px; }
+.admin-recovery-show { display: flex; align-items: center; gap: 10px; margin: 4px 0 23px; color: var(--forest); font-weight: 700; }
+.admin-recovery-show input { width: auto; flex: none; }
+@media (max-width: 520px) {
+  .admin-login-actions { flex-direction: column; align-items: stretch; }
+  .admin-login-actions .btn { width: 100%; text-align: center; }
+  .admin-login-or { text-align: center; }
+  .admin-password-field input { min-width: 0; }
+}
