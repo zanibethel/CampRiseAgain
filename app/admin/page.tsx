@@ -4,10 +4,11 @@ import { DragEvent, FormEvent, useEffect, useMemo, useState } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import HomeAdmin from "@/components/HomeAdmin";
 import TeamAdmin from "@/components/TeamAdmin";
+import MemorialGalleryAdmin from "@/components/MemorialGalleryAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const ADMINS = ["schofieldtierra@gmail.com", "zanibethel@gmail.com"];
-type AdminSection = "home" | "resources" | "staff";
+type AdminSection = "home" | "memorial" | "resources" | "staff";
 
 type ResourceItem = {
   id: number;
@@ -210,6 +211,7 @@ export default function AdminPage() {
 
   const tabs: { id: AdminSection; label: string; description: string }[] = [
     { id: "home", label: "Home Page", description: "Sections, logo, copy, and display order" },
+    { id: "memorial", label: "Michael’s Photos", description: "Upload, arrange, and caption his story photos" },
     { id: "resources", label: "Resources Page", description: "Support links and display order" },
     { id: "staff", label: "Meet the Staff", description: "Staff profiles, photos, and visibility" },
   ];
@@ -218,11 +220,14 @@ export default function AdminPage() {
     <><SiteHeader /><main className="form-wrap" style={{ maxWidth: 980 }}>
       <div className="eyebrow">Administration</div><h1>Camp Rise Again Admin</h1><p className="section-copy">Signed in as {userEmail}. Choose the page you want to update below.</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, margin: "24px 0" }}>
-        {tabs.map((tab) => { const active = activeSection === tab.id; return <button key={tab.id} type="button" onClick={() => { setActiveSection(tab.id); setStatus(""); }} className="card" style={{ textAlign: "left", cursor: "pointer", border: active ? "2px solid currentColor" : undefined, opacity: active ? 1 : .86 }}><strong style={{ display: "block", fontSize: 18, marginBottom: 6 }}>{tab.label}</strong><span style={{ fontSize: 14, opacity: .8 }}>{tab.description}</span></button>; })}
+        {tabs.map((tab) => { const active = activeSection === tab.id; return <button key={tab.id} type="button" onClick={() => { setActiveSection(tab.id); setStatus(""); window.requestAnimationFrame(() => document.getElementById("admin-section-content")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} className="card" style={{ textAlign: "left", cursor: "pointer", border: active ? "2px solid currentColor" : undefined, opacity: active ? 1 : .86 }}><strong style={{ display: "block", fontSize: 18, marginBottom: 6 }}>{tab.label}</strong><span style={{ fontSize: 14, opacity: .8 }}>{tab.description}</span></button>; })}
       </div>
       <div className="actions" style={{ marginBottom: 24 }}><a className="btn btn-primary" href="/" target="_blank" rel="noreferrer">Preview Site ↗</a><button className="btn btn-secondary" type="button" onClick={signOut}>Sign Out</button></div>
 
+      <div id="admin-section-content" style={{ scrollMarginTop: 20 }}>
       {activeSection === "home" && <HomeAdmin />}
+
+      {activeSection === "memorial" && <section className="form-card" aria-label="Michael’s photos editor"><h2>Michael’s Photos</h2><p className="section-copy">Upload multiple photos and place them throughout Michael’s story. Add captions, change positions, and rearrange or hide individual photos. Changes save directly to the website without changing his main portrait.</p><div className="actions" style={{ marginBottom: 20 }}><a className="btn btn-secondary" href="/michael-garza" target="_blank" rel="noreferrer">View Our Story ↗</a></div><MemorialGalleryAdmin /></section>}
 
       {activeSection === "resources" && <section className="form-card"><h2>Resources Page</h2><p className="section-copy">Drag the cards into the order you want them displayed. Select Edit to change a resource. Ordering saves automatically.</p><div style={{ marginTop: 22 }}>
         {resources.map((item, index) => { const editing = editingResourceId === item.id; return <div key={item.id} className="card" draggable={!editing} onDragStart={() => setDraggingResourceId(item.id)} onDragOver={allowDrop} onDrop={() => handleResourceDrop(item.id)} onDragEnd={() => setDraggingResourceId(null)} style={{ marginBottom: 14, opacity: draggingResourceId === item.id ? .55 : 1, cursor: editing ? "default" : "grab" }}>
@@ -231,6 +236,7 @@ export default function AdminPage() {
         </div>; })}</div><button className="btn btn-secondary" type="button" onClick={addResource} style={{ width: "100%", marginTop: 8 }}>+ Add New Resource</button></section>}
 
       {activeSection === "staff" && <TeamAdmin />}
+      </div>
       {status && <div className="status" aria-live="polite" style={{ marginTop: 20 }}>{status}</div>}
     </main></>
   );
