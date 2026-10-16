@@ -112,6 +112,18 @@ export default function HomeManagedPanel() {
         const element = main.querySelector(`[data-home-section="${id}"]`);
         if (element) main.appendChild(element);
       });
+
+      // Section ordering is loaded asynchronously. If a visitor followed an
+      // About/Contact hash link, restore the intended anchor after reordering.
+      const anchor = window.location.hash.slice(1);
+      if (anchor) {
+        window.requestAnimationFrame(() => {
+          document.getElementById(anchor)?.scrollIntoView({
+            block: "start",
+            behavior: "instant",
+          });
+        });
+      }
     });
   }, [pathname, supabase]);
 
