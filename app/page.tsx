@@ -3,6 +3,7 @@ import SiteHeader from "@/components/SiteHeader";
 import DonateButton from "@/components/DonateButton";
 import TeamSection from "@/components/TeamSection";
 import ManagedLogo from "@/components/ManagedLogo";
+import MemorialSection from "@/components/MemorialSection";
 
 export default function Home() {
   return (
@@ -44,6 +45,8 @@ export default function Home() {
             <div className="card"><h3>Volunteer With Us</h3><p>Support food service, activities, transportation, camp mentoring, setup, and more.</p></div>
           </div>
         </section>
+
+        <MemorialSection variant="home" />
 
         <div data-home-section="team"><TeamSection /></div>
 
