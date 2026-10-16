@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
-const defaultOrder = ["announcement", "hero", "about", "schedule", "team", "keep-going", "donate", "contact"];
+const defaultOrder = ["announcement", "hero", "about", "legacy", "schedule", "team", "keep-going", "donate", "contact"];
 
 export default function HomeManagedPanel() {
   const pathname = usePathname();
