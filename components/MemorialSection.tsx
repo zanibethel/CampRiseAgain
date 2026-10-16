@@ -5,11 +5,13 @@ import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { defaultMemorial, type MemorialContent } from "@/lib/memorial";
 import { michaelPhotoDataUrl } from "@/lib/michael-portrait";
+import { MEMORIAL_GALLERY_TABLE, MEMORIAL_IMAGE_BUCKET, orderGallery, type MemorialGalleryPhoto, type MemorialGalleryPlacement } from "@/lib/memorial-gallery";
 
 export default function MemorialSection({ variant }: { variant: "home" | "page" }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [memorial, setMemorial] = useState<MemorialContent>(defaultMemorial);
   const [imageFailed, setImageFailed] = useState(false);
+  const [gallery, setGallery] = useState<MemorialGalleryPhoto[]>([]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -22,6 +24,35 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
       });
     return () => { active = false; };
   }, [supabase]);
+
+  useEffect(() => {
+    if (!supabase || variant !== "page") return;
+    let active = true;
+    supabase.from(MEMORIAL_GALLERY_TABLE).select("*").eq("is_visible", true)
+      .order("sort_order").order("created_at")
+      .then(({ data, error }) => {
+        if (active && !error) setGallery(orderGallery((data || []) as MemorialGalleryPhoto[]));
+      });
+    return () => { active = false; };
+  }, [supabase, variant]);
+
+  function galleryAt(placement: MemorialGalleryPlacement) {
+    if (!supabase) return null;
+    const photos = gallery.filter(photo => photo.placement === placement);
+    if (!photos.length) return null;
+    return (
+      <div className={`memorial-gallery-strip${photos.length === 1 ? " memorial-gallery-single" : ""}`} aria-label="Michael's photo memories">
+        {photos.map((photo, index) => {
+          const url = supabase.storage.from(MEMORIAL_IMAGE_BUCKET).getPublicUrl(photo.storage_path).data.publicUrl;
+          return <figure className="memorial-gallery-figure" key={photo.id}>
+            <img src={url} loading="lazy" decoding="async"
+              alt={photo.caption.trim() || `A memory of Michael Alexander Garza, photo ${index + 1}`} />
+            {photo.caption.trim() && <figcaption>{photo.caption}</figcaption>}
+          </figure>;
+        })}
+      </div>
+    );
+  }
 
   const photoUrl = memorial.photo_path && supabase
     ? supabase.storage.from("camp-rise-again-branding").getPublicUrl(memorial.photo_path).data.publicUrl
@@ -82,12 +113,16 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
           <div className="memorial-prose">
             <h2>A life of service. A lasting legacy.</h2>
             <p>{memorial.intro}</p>
+            {galleryAt("after-intro")}
             <h2>Beyond the Uniform</h2>
             {memorial.personal_story.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
+            {galleryAt("after-personal")}
             <h2>Why Camp Rise Again Exists</h2>
             <p>{memorial.tierra_story}</p>
+            {galleryAt("after-founder")}
             <h2>Michael’s Legacy</h2>
             <p>{memorial.legacy}</p>
+            {galleryAt("after-legacy")}
           </div>
         </div>
 
@@ -97,6 +132,8 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
           <p>Michael's service was recognized through military honors and decorations.</p>
           <ul>{memorial.honors.split("\n").map((honor, index) => honor.trim() && <li key={index}>{honor.trim()}</li>)}</ul>
         </div>
+
+        {galleryAt("after-honors")}
 
         <div className="memorial-closing">
           <blockquote>“{memorial.quote}”</blockquote>
