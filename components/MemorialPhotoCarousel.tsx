@@ -21,6 +21,7 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
   const [position, setPosition] = useState(1);
   const [snapping, setSnapping] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [explicitPlay, setExplicitPlay] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [inView, setInView] = useState(true);
@@ -42,7 +43,7 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
         { photo: photos[0], photoIndex: 0, key: "trailing-copy" },
       ]
     : photos.map((photo, photoIndex) => ({ photo, photoIndex, key: photo.id }));
-  const autoRunning = count > 1 && !paused && !hovered && !focused && inView &&
+  const autoRunning = count > 1 && !paused && (explicitPlay || (!hovered && !focused)) && inView &&
     tabVisible && !reducedMotion && !lightboxOpen;
 
   useEffect(() => {
@@ -106,6 +107,7 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
   function select(index: number) {
     if (count < 2) return;
     setPaused(true);
+    setExplicitPlay(false);
     const next = (index + count) % count;
     if (next === active) return;
     if (next === (active + 1) % count) {
@@ -160,6 +162,7 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
     if (ignoreClick.current) { event.preventDefault(); return; }
     triggerRef.current = event.currentTarget;
     setPaused(true);
+    setExplicitPlay(false);
     setLightboxOpen(true);
   }
 
@@ -231,7 +234,10 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
             <button
               type="button"
               className="memorial-carousel-play"
-              onClick={() => setPaused((value) => !value)}
+              onClick={() => {
+                setPaused(!paused);
+                setExplicitPlay(paused);
+              }}
               aria-label={paused ? "Resume automatic photo advance" : "Pause automatic photo advance"}
               aria-pressed={paused}
             >
