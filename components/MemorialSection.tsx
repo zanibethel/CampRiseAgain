@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { defaultMemorial, type MemorialContent } from "@/lib/memorial";
+import { michaelPhotoDataUrl } from "@/lib/michael-portrait";
 
 export default function MemorialSection({ variant }: { variant: "home" | "page" }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -24,7 +25,7 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
 
   const photoUrl = memorial.photo_path && supabase
     ? supabase.storage.from("camp-rise-again-branding").getPublicUrl(memorial.photo_path).data.publicUrl
-    : "/michael-garza.webp";
+    : michaelPhotoDataUrl;
 
   const portrait = (
     <div className="memorial-photo-wrap">
