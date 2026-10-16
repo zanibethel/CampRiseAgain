@@ -407,3 +407,70 @@ input[type="checkbox"], input[type="radio"] {
   .memorial-carousel-track { transition: none !important; }
   .memorial-carousel * { scroll-behavior: auto !important; }
 }
+
+/* Compact, single-row sticky navigation on phones and narrow tablets.
+   The header stays in the normal document flow, so page content starts below it. */
+@media (max-width: 680px) {
+  header .nav {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 56px;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+  header .brand {
+    flex: 0 0 34px;
+    align-self: center;
+    width: 34px;
+    min-width: 34px;
+    gap: 0;
+  }
+  header .brand img {
+    display: block;
+    width: 34px;
+    height: 34px;
+  }
+  header .brand span { display: none; }
+  header .navlinks {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+    grid-template-columns: none;
+    width: auto;
+    min-width: 0;
+    gap: clamp(3px, 1vw, 7px);
+  }
+  header .navlinks a {
+    flex-shrink: 0;
+    min-width: 0;
+    white-space: nowrap;
+    line-height: 1.2;
+    text-align: center;
+  }
+  header .navlinks .resources-link,
+  header .navlinks .legacy-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    font-size: clamp(10px, 2.8vw, 12px);
+  }
+  header .navlinks .btn {
+    width: auto;
+    min-height: 40px;
+    padding: 8px clamp(6px, 1.8vw, 10px);
+    font-size: clamp(10px, 2.8vw, 12px);
+  }
+}
+@media (max-width: 350px) {
+  header .nav { padding-inline: 7px; gap: 5px; }
+  header .navlinks { gap: 4px; }
+}
+
+/* Anchor navigation lands below the sticky header instead of hiding headings. */
+html { scroll-padding-top: 88px; }
+@media (max-width: 680px) {
+  html { scroll-padding-top: 64px; }
+}
