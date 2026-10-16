@@ -2,6 +2,7 @@
 
 import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { defaultMemorial, type MemorialContent } from "@/lib/memorial";
 
 type Settings = {
   id: number;
@@ -20,6 +21,7 @@ type Settings = {
   contact_heading: string;
   contact_copy: string;
   logo_path: string;
+  memorial_content: MemorialContent;
   home_section_order: string[];
 };
 
@@ -32,9 +34,9 @@ type ScheduleItem = {
   sort_order: number;
 };
 
-type SectionId = "announcement" | "hero" | "about" | "schedule" | "team" | "keep-going" | "donate" | "contact";
+type SectionId = "announcement" | "hero" | "about" | "legacy" | "schedule" | "team" | "keep-going" | "donate" | "contact";
 
-const defaultOrder: SectionId[] = ["announcement", "hero", "about", "schedule", "team", "keep-going", "donate", "contact"];
+const defaultOrder: SectionId[] = ["announcement", "hero", "about", "legacy", "schedule", "team", "keep-going", "donate", "contact"];
 
 const defaults: Settings = {
   id: 1,
@@ -53,6 +55,7 @@ const defaults: Settings = {
   contact_heading: "Questions before you apply?",
   contact_copy: "Send us a message and your email app will open with your answers already included so you can review and send it directly.",
   logo_path: "",
+  memorial_content: defaultMemorial,
   home_section_order: defaultOrder,
 };
 
@@ -60,6 +63,7 @@ const labels: Record<SectionId, { title: string; subtitle: string }> = {
   announcement: { title: "Announcement", subtitle: "Optional notice shown near the top of the homepage" },
   hero: { title: "Hero & Logo", subtitle: "Main headline, introduction, and Camp Rise Again logo" },
   about: { title: "About the Camp", subtitle: "About copy and fall/spring season details" },
+  legacy: { title: "Michael’s Legacy", subtitle: "Homepage dedication, memorial story, honors and portrait" },
   schedule: { title: "Camp Schedule", subtitle: "Activities shown in the public schedule section" },
   team: { title: "Meet the Staff", subtitle: "Controls where the staff section appears on the homepage" },
   "keep-going": { title: "Keep Going", subtitle: "Hope-focused closing message" },
@@ -75,6 +79,7 @@ export default function HomeAdmin() {
   const [dragging, setDragging] = useState<SectionId | null>(null);
   const [status, setStatus] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingMemorialPhoto, setUploadingMemorialPhoto] = useState(false);
 
   async function load() {
     if (!supabase) return;
@@ -85,7 +90,7 @@ export default function HomeAdmin() {
     if (settingsData) {
       const raw = settingsData as Partial<Settings>;
       const order = Array.isArray(raw.home_section_order) ? raw.home_section_order.filter((x): x is SectionId => defaultOrder.includes(x as SectionId)) : [];
-      setSettings({ ...defaults, ...raw, home_section_order: [...order, ...defaultOrder.filter((x) => !order.includes(x))] });
+      setSettings({ ...defaults, ...raw, memorial_content: { ...defaultMemorial, ...(raw.memorial_content || {}) }, home_section_order: [...order, ...defaultOrder.filter((x) => !order.includes(x))] });
     }
     if (scheduleData) setSchedule(scheduleData as ScheduleItem[]);
   }
@@ -150,6 +155,42 @@ export default function HomeAdmin() {
     }
   }
 
+  async function uploadMemorialPhoto(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !supabase) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setStatus("Please select a JPEG, PNG or WebP image."); return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setStatus("Choose a photo smaller than 8 MB."); return;
+    }
+    setUploadingMemorialPhoto(true);
+    setStatus("Uploading Michael's portrait…");
+    const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+    const path = `michael-garza-${Date.now()}.${ext}`;
+    try {
+      const { error: uploadError } = await supabase.storage.from("camp-rise-again-branding").upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+      if (uploadError) throw uploadError;
+      const nextContent = { ...defaultMemorial, ...settings.memorial_content, photo_path: path };
+      const { error: saveError } = await supabase.from("site_settings").update({ memorial_content: nextContent }).eq("id", 1);
+      if (saveError) {
+        await supabase.storage.from("camp-rise-again-branding").remove([path]);
+        throw saveError;
+      }
+      setSettings({ ...settings, memorial_content: nextContent });
+      setStatus("Michael's portrait is saved on the homepage and memorial page.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not upload the portrait.");
+    } finally {
+      setUploadingMemorialPhoto(false);
+      e.target.value = "";
+    }
+  }
+
+  function updateMemorial<K extends keyof MemorialContent>(key: K, value: MemorialContent[K]) {
+    setSettings(prev => ({ ...prev, memorial_content: { ...defaultMemorial, ...prev.memorial_content, [key]: value } }));
+  }
+
   async function resetLogo() {
     if (!supabase) return;
     const oldPath = settings.logo_path;
@@ -211,6 +252,19 @@ export default function HomeAdmin() {
                   {id === "hero" && <><div className="field"><label>Main headline</label><input value={settings.hero_heading} onChange={(e) => setSettings({ ...settings, hero_heading: e.target.value })} /></div><div className="field"><label>Introduction</label><textarea value={settings.hero_lead} onChange={(e) => setSettings({ ...settings, hero_lead: e.target.value })} /></div><div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", marginBottom: 18 }}><img src={logoUrl()} alt="Current Camp Rise Again logo" style={{ width: 120, height: 120, objectFit: "contain", borderRadius: 14, background: "white" }} /><div><div className="field"><label>Replace logo</label><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={uploadLogo} disabled={uploadingLogo} /></div><div className="actions"><button className="btn btn-secondary" type="button" onClick={resetLogo} disabled={!settings.logo_path || uploadingLogo}>Use Original Logo</button></div></div></div></>}
 
                   {id === "about" && <><div className="field"><label>About heading</label><input value={settings.about_heading} onChange={(e) => setSettings({ ...settings, about_heading: e.target.value })} /></div><div className="field"><label>About copy</label><textarea style={{ minHeight: 180 }} value={settings.about_copy} onChange={(e) => setSettings({ ...settings, about_copy: e.target.value })} /></div><div className="field"><label>Fall season details</label><textarea value={settings.fall_details} onChange={(e) => setSettings({ ...settings, fall_details: e.target.value })} /></div><div className="field"><label>Spring season details</label><textarea value={settings.spring_details} onChange={(e) => setSettings({ ...settings, spring_details: e.target.value })} /></div></>}
+
+                  {id === "legacy" && <>
+                    <p className="section-copy">Edit Michael's dedication on the homepage and his full memorial page. Please confirm the awards list with Tierra before publishing corrections.</p>
+                    <div className="field"><label>Homepage dedication heading</label><input value={settings.memorial_content.home_heading} onChange={(e) => updateMemorial("home_heading", e.target.value)} /></div>
+                    <div className="field"><label>Homepage dedication text</label><textarea style={{ minHeight: 160 }} value={settings.memorial_content.home_copy} onChange={(e) => updateMemorial("home_copy", e.target.value)} /></div>
+                    <div className="field"><label>Michael's life and service</label><textarea style={{ minHeight: 160 }} value={settings.memorial_content.intro} onChange={(e) => updateMemorial("intro", e.target.value)} /></div>
+                    <div className="field"><label>Tierra's story</label><textarea style={{ minHeight: 180 }} value={settings.memorial_content.tierra_story} onChange={(e) => updateMemorial("tierra_story", e.target.value)} /></div>
+                    <div className="field"><label>His legacy and the camp's mission</label><textarea style={{ minHeight: 180 }} value={settings.memorial_content.legacy} onChange={(e) => updateMemorial("legacy", e.target.value)} /></div>
+                    <div className="field"><label>Tierra's quote (without quotation marks)</label><textarea value={settings.memorial_content.quote} onChange={(e) => updateMemorial("quote", e.target.value)} /></div>
+                    <div className="field"><label>Military honors (one per line)</label><textarea style={{ minHeight: 180 }} value={settings.memorial_content.honors} onChange={(e) => updateMemorial("honors", e.target.value)} /></div>
+                    <div className="field"><label>Michael's portrait</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadMemorialPhoto} disabled={uploadingMemorialPhoto} /><small>Uploading saves this image immediately to both pages; text changes save with Save Section.</small></div>
+                    <a className="btn btn-secondary" href="/michael-garza" target="_blank" rel="noreferrer" style={{ marginBottom: 16 }}>Preview Memorial Page ↗</a>
+                  </>}
 
                   {id === "schedule" && <><p className="section-copy">Edit schedule activities below. The whole schedule section moves with this card.</p>{schedule.map((item, itemIndex) => <div className="card" key={item.id} style={{ marginBottom: 12 }}><div className="field-grid"><div className="field"><label>Day</label><input value={item.day_label} onChange={(e) => setSchedule(schedule.map((x, i) => i === itemIndex ? { ...x, day_label: e.target.value } : x))} /></div><div className="field"><label>Time</label><input value={item.time_label} onChange={(e) => setSchedule(schedule.map((x, i) => i === itemIndex ? { ...x, time_label: e.target.value } : x))} /></div></div><div className="field"><label>Activity</label><input value={item.title} onChange={(e) => setSchedule(schedule.map((x, i) => i === itemIndex ? { ...x, title: e.target.value } : x))} /></div><div className="field"><label>Details</label><textarea value={item.details || ""} onChange={(e) => setSchedule(schedule.map((x, i) => i === itemIndex ? { ...x, details: e.target.value } : x))} /></div><div className="actions"><button className="btn btn-primary" type="button" onClick={() => saveScheduleItem(item)}>Save Activity</button><button className="btn btn-secondary" type="button" onClick={() => deleteScheduleItem(item.id)}>Delete</button></div></div>)}<button className="btn btn-secondary" type="button" onClick={addScheduleItem}>+ Add Schedule Activity</button></>}
 
