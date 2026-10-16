@@ -474,3 +474,43 @@ html { scroll-padding-top: 88px; }
 @media (max-width: 680px) {
   html { scroll-padding-top: 64px; }
 }
+
+/* Private, privacy-conscious visitor report (mobile first). */
+.visitor-admin { min-width: 0; }
+.visitor-admin-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.visitor-admin-heading h2 { margin: 7px 0 10px; font-size: clamp(27px, 4vw, 35px); }
+.visitor-admin-heading .section-copy { max-width: 640px; margin: 0 0 22px; font-size: 15px; line-height: 1.65; }
+.visitor-admin-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.visitor-admin-actions select { min-height: 42px; border: 1px solid #c3d2cb; border-radius: 12px; padding: 8px 10px; width: auto; max-width: 190px; background: white; color: var(--forest); }
+.visitor-admin-actions .btn { padding: 10px 15px; white-space: nowrap; }
+.visitor-admin-metrics { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; margin: 24px 0; }
+.visitor-admin-metric { border: 1px solid var(--line); border-radius: 16px; padding: clamp(14px,3vw,24px); background: #f8fbf9; min-width: 0; }
+.visitor-admin-metric > span { display: block; color: #527065; font-weight: 700; margin-bottom: 8px; }
+.visitor-admin-metric > strong { display: block; font-size: clamp(32px,5vw,51px); font-variant-numeric: tabular-nums; line-height: 1.2; color: var(--forest); overflow-wrap: anywhere; }
+.visitor-admin-section { border: 1px solid var(--line); border-radius: 17px; background: white; padding: 20px; min-width: 0; margin-bottom: 15px; }
+.visitor-admin-section h3 { margin: 0 0 20px; font-size: 19px; color: var(--forest); }
+.visitor-admin-sections { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+.visitor-trend { display: flex; align-items: stretch; justify-content: space-between; gap: 5px; height: 183px; padding-bottom: 4px; overflow-x: auto; }
+.visitor-trend-item { display: flex; flex-direction: column; align-items: center; min-width: 35px; flex: 1 0 35px; max-width: 70px; }
+.visitor-trend-number { font-size: 11px; font-variant-numeric: tabular-nums; color: #436155; height: 22px; }
+.visitor-trend-track { width: 100%; flex: 1; min-height: 0; display: flex; align-items: flex-end; justify-content: center; border-bottom: 1px solid #bed3c8; }
+.visitor-trend-bar { width: min(70%,28px); min-height: 0; border-radius: 6px 6px 0 0; background: #267453; }
+.visitor-trend-day { font-size: 10px; padding-top: 8px; color: #566b61; white-space: nowrap; }
+.visitor-admin-ranking { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.visitor-admin-ranking li { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 10px 0; border-top: 1px solid #e8efeb; min-width: 0; }
+.visitor-admin-ranking li span { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
+.visitor-admin-ranking li strong { flex: 0 0 auto; font-size: 16px; font-variant-numeric: tabular-nums; }
+.visitor-admin-ranking li small { font-size: 11px; font-weight: 400; }
+.visitor-admin-footer { color: #60756b; font-size: 12px; line-height: 1.7; margin-top: 15px; }
+.visitor-admin-footer a, .visitor-admin-links a { color: #155f45; text-decoration: underline; font-weight: 700; }
+.visitor-admin-links { display: flex; flex-wrap: wrap; gap: 14px; }
+.visitor-admin-status p { margin: 10px 0; }
+.visitor-admin-status code { overflow-wrap: anywhere; }
+@media (max-width: 680px) {
+  .visitor-admin-sections { grid-template-columns: 1fr; }
+  .visitor-admin-section { padding: 14px; }
+  .visitor-admin-metric { padding: 14px; }
+  .visitor-admin-actions { width: 100%; }
+  .visitor-admin-actions select { flex: 1; }
+  .visitor-trend-item { flex-basis: 30px; min-width: 30px; }
+}
