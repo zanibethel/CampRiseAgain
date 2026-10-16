@@ -3,7 +3,7 @@ import SiteHeader from "@/components/SiteHeader";
 import MemorialSection from "@/components/MemorialSection";
 
 export const metadata: Metadata = {
-  title: "Michael Alexander Garza's Legacy | Camp Rise Again",
+  title: "Our Story | Michael Alexander Garza | Camp Rise Again",
   description: "Learn how Michael Alexander Garza's life and 19½ years of Air Force service inspired Tierra Schofield to establish Camp Rise Again.",
 };
 
