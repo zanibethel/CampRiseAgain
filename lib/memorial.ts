@@ -1,3 +1,21 @@
+export const memorialPhotoPlacements = [
+  { value: "after-service", label: "After his life and service" },
+  { value: "after-personal", label: "After Beyond the Uniform" },
+  { value: "after-founder", label: "After Tierra's story" },
+  { value: "after-legacy", label: "After Michael's Legacy" },
+  { value: "after-honors", label: "After military honors" },
+] as const;
+
+export type MemorialPhotoPlacement = (typeof memorialPhotoPlacements)[number]["value"];
+
+export type MemorialGalleryPhoto = {
+  id: string;
+  path: string;
+  caption: string;
+  placement: MemorialPhotoPlacement;
+  visible: boolean;
+};
+
 export type MemorialContent = {
   home_heading: string;
   home_copy: string;
@@ -8,6 +26,7 @@ export type MemorialContent = {
   quote: string;
   honors: string;
   photo_path: string;
+  photos: MemorialGalleryPhoto[];
 };
 
 export const defaultMemorial: MemorialContent = {
@@ -19,5 +38,6 @@ export const defaultMemorial: MemorialContent = {
   legacy: "Michael's memory is woven into the purpose of Camp Rise Again. Through outdoor adventures, open conversations, and supportive connection, Tierra hopes each participant leaves knowing their life matters and they do not have to walk through the darkness alone. The camp offers community and encouragement; it is not a substitute for professional mental-health treatment or crisis care.",
   quote: "I don’t believe healing has to happen alone.",
   honors: "3 Air Force Commendation Medals\n2 Air Force Achievement Medals\n1 Combat Readiness Medal\n1 National Defense Service Medal\n2 Global War on Terrorism Service Medals\n2 Air and Space Campaign Medals\n1 Nuclear Deterrence Operations Service Medal",
-  photo_path: ""
+  photo_path: "",
+  photos: [],
 };
