@@ -25,6 +25,10 @@ type ResourceItem = {
 export default function AdminPage() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
+  const [authBusy, setAuthBusy] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [activeSection, setActiveSection] = useState<AdminSection>("home");
   const [resources, setResources] = useState<ResourceItem[]>([]);
@@ -122,14 +126,54 @@ export default function AdminPage() {
     return () => { active = false; };
   }, [supabase, userEmail]);
 
-  async function sendLogin(e: FormEvent) {
-    e.preventDefault();
-    if (!supabase) return;
+  function authorizedEmail() {
     const normalized = email.trim().toLowerCase();
     if (!ADMINS.includes(normalized)) {
-      setStatus("That email is not authorized for Camp Rise Again administration.");
-      return;
+      setStatus("Only authorized Camp Rise Again administrators can use this login.");
+      return null;
     }
+    return normalized;
+  }
+
+  async function signInWithPassword(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!supabase || authBusy) return;
+    const normalized = authorizedEmail();
+    if (!normalized) return;
+
+    setAuthBusy(true);
+    setStatus("");
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: normalized,
+        password,
+      });
+      if (error) {
+        setStatus("Email or password not recognized. If you have not created a password yet, use Forgot password to set one, or sign in using an email link.");
+        return;
+      }
+      const signedInEmail = data.user?.email?.toLowerCase() || "";
+      if (!ADMINS.includes(signedInEmail)) {
+        await supabase.auth.signOut();
+        setStatus("This account is not authorized to administer Camp Rise Again.");
+        return;
+      }
+      setPassword("");
+      setUserEmail(signedInEmail);
+      setStatus("");
+    } catch {
+      setStatus("Could not sign in right now. Try again or use an email sign-in link.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function sendLogin() {
+    if (!supabase || authBusy) return;
+    const normalized = authorizedEmail();
+    if (!normalized) return;
+
+    setAuthBusy(true);
     setStatus("Sending secure sign-in link…");
     try {
       const { error } = await supabase.auth.signInWithOtp({
@@ -139,9 +183,35 @@ export default function AdminPage() {
           shouldCreateUser: false,
         },
       });
-      setStatus(error ? error.message : "Check your email for the newest sign-in link. It works once, and must open in the same browser where you'll use Admin.");
+      setStatus(error ? "Unable to send the sign-in email. Please try again shortly." : "Check your email for a secure sign-in link. Open it in this browser if possible. Older links cannot be reused.");
     } catch {
-      setStatus("Could not request a sign-in link. Reset Sign-In and try again.");
+      setStatus("Could not request a sign-in link. Please try again.");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function requestPasswordReset(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!supabase || authBusy) return;
+    const normalized = authorizedEmail();
+    if (!normalized) return;
+
+    setAuthBusy(true);
+    setStatus("");
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(normalized, {
+        redirectTo: `${window.location.origin}/admin/reset-password`,
+      });
+      if (error) {
+        setStatus("The recovery email could not be sent right now. Please try again shortly.");
+        return;
+      }
+      setStatus("If this admin account is registered, an email with a password-creation link is on its way. Open that link to create your password; it will open a separate secure form.");
+    } catch {
+      setStatus("The recovery email could not be sent right now. Please try again shortly.");
+    } finally {
+      setAuthBusy(false);
     }
   }
 
@@ -207,7 +277,61 @@ export default function AdminPage() {
   if (loading) return <><SiteHeader /><main className="form-wrap"><p>Loading admin…</p></main></>;
 
   if (!userEmail) {
-    return <><SiteHeader /><main className="form-wrap"><div className="eyebrow">Administration</div><h1>Camp Rise Again Admin</h1><p className="section-copy">Authorized administrators can sign in with a secure link sent to their email address.</p><form className="form-card" onSubmit={sendLogin}><div className="field"><label htmlFor="email">Admin email</label><input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div><button className="btn btn-primary">Email Me a Sign-In Link</button>{status && <div className="status" role="status" aria-live="polite">{status}</div>}<div className="actions" style={{ marginTop: 12 }}><button className="btn btn-secondary" type="button" onClick={resetSignIn}>Reset Sign-In</button></div><p className="section-copy" style={{ fontSize: 14, marginBottom: 0 }}>If the email opens inside Gmail or another app, open the link in your regular browser. Old links cannot be reused.</p></form></main></>;
+    return (
+      <>
+        <SiteHeader />
+        <main className="form-wrap">
+          <div className="eyebrow">Administration</div>
+          <h1>Camp Rise Again Admin</h1>
+          <p className="section-copy">Authorized administrators can sign in with a password or request a secure email link.</p>
+
+          {forgotPasswordMode ? (
+            <form className="form-card admin-login-card" onSubmit={requestPasswordReset}>
+              <h2>Create or Reset Your Password</h2>
+              <p className="section-copy">Enter your admin email. We will send a recovery link that opens a secure form where you can create a new password.</p>
+              <div className="field">
+                <label htmlFor="recovery-email">Admin email</label>
+                <input id="recovery-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" inputMode="email" required disabled={authBusy} />
+              </div>
+              <div className="admin-login-actions">
+                <button className="btn btn-primary" type="submit" disabled={authBusy}>{authBusy ? "Sending…" : "Send Password Reset Link"}</button>
+                <button className="btn btn-secondary" type="button" disabled={authBusy} onClick={() => { setForgotPasswordMode(false); setStatus(""); }}>Back to Sign In</button>
+              </div>
+              {status && <p className="status" role="status" aria-live="polite">{status}</p>}
+              <p className="section-copy admin-login-hint">For security, the email is only sent to the registered admin account. If the link opens in a different browser, you may need to sign in there after setting your password.</p>
+            </form>
+          ) : (
+            <form className="form-card admin-login-card" onSubmit={signInWithPassword}>
+              <h2>Admin Sign In</h2>
+              <div className="field">
+                <label htmlFor="admin-email">Admin email</label>
+                <input id="admin-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" inputMode="email" required disabled={authBusy} />
+              </div>
+              <div className="field">
+                <label htmlFor="admin-password">Password</label>
+                <div className="admin-password-field">
+                  <input id="admin-password" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required disabled={authBusy} />
+                  <button className="admin-show-password" type="button" disabled={authBusy} onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}>{showPassword ? "Hide" : "Show"}</button>
+                </div>
+              </div>
+              <div className="admin-login-forgot">
+                <button type="button" onClick={() => { setForgotPasswordMode(true); setStatus(""); setPassword(""); }} disabled={authBusy}>Forgot password? / Create one</button>
+              </div>
+              <div className="admin-login-actions">
+                <button className="btn btn-primary" type="submit" disabled={authBusy}>{authBusy ? "Signing in…" : "Sign In with Password"}</button>
+                <span className="admin-login-or">or</span>
+                <button className="btn btn-secondary" type="button" onClick={() => void sendLogin()} disabled={authBusy}>{authBusy ? "Please wait…" : "Email Me a Sign-In Link"}</button>
+              </div>
+              {status && <p className="status" role="status" aria-live="polite">{status}</p>}
+              <div className="admin-login-footer">
+                <button className="btn btn-secondary" type="button" onClick={resetSignIn} disabled={authBusy}>Reset Sign-In Session</button>
+                <p className="section-copy admin-login-hint">New to password sign-in? Choose <strong>Forgot password? / Create one</strong> to set your first password. Email links will continue to work.</p>
+              </div>
+            </form>
+          )}
+        </main>
+      </>
+    );
   }
 
   const tabs: { id: AdminSection; label: string; description: string }[] = [
