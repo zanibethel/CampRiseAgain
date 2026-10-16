@@ -2,7 +2,9 @@
 
 import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { defaultMemorial, type MemorialContent } from "@/lib/memorial";
+import { defaultMemorial, type MemorialContent, type MemorialGalleryPhoto, type MemorialPhotoPlacement, memorialPhotoPlacements } from "@/lib/memorial";
+import MemorialPhotoManager from "@/components/MemorialPhotoManager";
+import { optimizeMemorialPhoto } from "@/lib/optimize-memorial-photo";
 
 type Settings = {
   id: number;
@@ -80,6 +82,7 @@ export default function HomeAdmin() {
   const [status, setStatus] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingMemorialPhoto, setUploadingMemorialPhoto] = useState(false);
+  const [uploadingGalleryPhotos, setUploadingGalleryPhotos] = useState(false);
 
   async function load() {
     if (!supabase) return;
@@ -90,7 +93,7 @@ export default function HomeAdmin() {
     if (settingsData) {
       const raw = settingsData as Partial<Settings>;
       const order = Array.isArray(raw.home_section_order) ? raw.home_section_order.filter((x): x is SectionId => defaultOrder.includes(x as SectionId)) : [];
-      setSettings({ ...defaults, ...raw, memorial_content: { ...defaultMemorial, ...(raw.memorial_content || {}) }, home_section_order: [...order, ...defaultOrder.filter((x) => !order.includes(x))] });
+      setSettings({ ...defaults, ...raw, memorial_content: { ...defaultMemorial, ...(raw.memorial_content || {}), photos: Array.isArray(raw.memorial_content?.photos) ? raw.memorial_content.photos : [] }, home_section_order: [...order, ...defaultOrder.filter((x) => !order.includes(x))] });
     }
     if (scheduleData) setSchedule(scheduleData as ScheduleItem[]);
   }
@@ -187,6 +190,69 @@ export default function HomeAdmin() {
     }
   }
 
+  async function uploadMemorialGallery(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files || []);
+    if (!supabase || files.length === 0) return;
+    const existing = Array.isArray(settings.memorial_content.photos) ? settings.memorial_content.photos : [];
+    const available = Math.max(0, 30 - existing.length);
+    if (!available) { setStatus("The memorial already has 30 photos."); event.target.value = ""; return; }
+
+    setUploadingGalleryPhotos(true);
+    const additions: MemorialGalleryPhoto[] = [];
+    const problems: string[] = [];
+    const placements: MemorialPhotoPlacement[] = memorialPhotoPlacements.map((item) => item.value);
+    const selectedFiles = files.slice(0, available);
+
+    try {
+      for (const [index, file] of selectedFiles.entries()) {
+        setStatus(`Preparing photo ${index + 1} of ${selectedFiles.length}…`);
+        try {
+          const prepared = await optimizeMemorialPhoto(file);
+          const extension = prepared.type === "image/png" ? "png" : prepared.type === "image/webp" ? "webp" : "jpg";
+          const path = `memorial/michael-${Date.now()}-${Math.random().toString(36).slice(2, 12)}.${extension}`;
+          const { error } = await supabase.storage.from("camp-rise-again-branding").upload(path, prepared, {
+            cacheControl: "3600", upsert: false, contentType: prepared.type,
+          });
+          if (error) throw error;
+          additions.push({
+            id: `photo-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`,
+            path,
+            caption: "",
+            placement: placements[(existing.length + additions.length) % placements.length],
+            visible: true,
+          });
+        } catch (error) {
+          problems.push(`${file.name}: ${error instanceof Error ? error.message : "upload failed"}`);
+        }
+      }
+
+      if (additions.length) {
+        const nextContent = {
+          ...defaultMemorial, ...settings.memorial_content,
+          photos: [...existing, ...additions],
+        };
+        const { error } = await supabase.from("site_settings").update({ memorial_content: nextContent }).eq("id", 1);
+        if (error) {
+          await supabase.storage.from("camp-rise-again-branding").remove(additions.map((photo) => photo.path));
+          throw error;
+        }
+        setSettings((previous) => ({ ...previous, memorial_content: nextContent }));
+      }
+
+      if (files.length > selectedFiles.length) problems.push(`Only the first ${selectedFiles.length} photos fit in the 30-photo gallery.`);
+      setStatus(`${additions.length} photo${additions.length === 1 ? "" : "s"} added to Michael's page.${problems.length ? " " + problems.join(" | ") : ""} You can now edit captions and placement, then Save Section.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Could not save gallery changes.");
+    } finally {
+      setUploadingGalleryPhotos(false);
+      event.target.value = "";
+    }
+  }
+
+  function galleryUrl(path: string) {
+    return supabase?.storage.from("camp-rise-again-branding").getPublicUrl(path).data.publicUrl || "";
+  }
+
   function updateMemorial<K extends keyof MemorialContent>(key: K, value: MemorialContent[K]) {
     setSettings(prev => ({ ...prev, memorial_content: { ...defaultMemorial, ...prev.memorial_content, [key]: value } }));
   }
@@ -264,6 +330,13 @@ export default function HomeAdmin() {
                     <div className="field"><label>Tierra's quote (without quotation marks)</label><textarea value={settings.memorial_content.quote} onChange={(e) => updateMemorial("quote", e.target.value)} /></div>
                     <div className="field"><label>Military honors (one per line)</label><textarea style={{ minHeight: 180 }} value={settings.memorial_content.honors} onChange={(e) => updateMemorial("honors", e.target.value)} /></div>
                     <div className="field"><label>Michael's portrait</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadMemorialPhoto} disabled={uploadingMemorialPhoto} /><small>Uploading saves this image immediately to both pages; text changes save with Save Section.</small></div>
+                    <MemorialPhotoManager
+                      photos={settings.memorial_content.photos || []}
+                      uploading={uploadingGalleryPhotos}
+                      onUpload={uploadMemorialGallery}
+                      onChange={(photos) => updateMemorial("photos", photos)}
+                      getPhotoUrl={galleryUrl}
+                    />
                     <a className="btn btn-secondary" href="/michael-garza" target="_blank" rel="noreferrer" style={{ marginBottom: 16 }}>Preview Memorial Page ↗</a>
                   </>}
 
@@ -277,7 +350,7 @@ export default function HomeAdmin() {
 
                   {id === "contact" && <><div className="field"><label>Contact heading</label><input value={settings.contact_heading} onChange={(e) => setSettings({ ...settings, contact_heading: e.target.value })} /></div><div className="field"><label>Contact description</label><textarea value={settings.contact_copy} onChange={(e) => setSettings({ ...settings, contact_copy: e.target.value })} /></div></>}
 
-                  {id !== "schedule" && id !== "team" && <button className="btn btn-primary" type="button" onClick={() => void saveSettings(`${labels[id].title} saved.`)}>Save Section</button>}
+                  {id !== "schedule" && id !== "team" && <button className="btn btn-primary" type="button" disabled={id === "legacy" && uploadingGalleryPhotos} onClick={() => void saveSettings(`${labels[id].title} saved.`)}>Save Section</button>}
                 </div>
               )}
             </div>
