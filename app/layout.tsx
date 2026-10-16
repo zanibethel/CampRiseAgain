@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import VisitorAnalytics from "@/components/VisitorAnalytics";
 
 export const metadata: Metadata = {
   title: "Camp Rise Again",
@@ -11,6 +12,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <body>
         {children}
+        <VisitorAnalytics />
       </body>
     </html>
   );
