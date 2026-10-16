@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent, type TouchEvent, type TransitionEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type TouchEvent, type TransitionEvent } from "react";
 
 export type CarouselPhoto = {
   id: string;
@@ -16,7 +16,6 @@ type Props = {
 const AUTOPLAY_MS = 8000;
 
 export default function MemorialPhotoCarousel({ photos, label }: Props) {
-  const regionId = useId();
   const [active, setActive] = useState(0);
   const [position, setPosition] = useState(1);
   const [snapping, setSnapping] = useState(false);
@@ -117,7 +116,7 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
       setActive(next);
       setPosition((old) => reducedMotion && old === 1 ? count : old - 1);
     } else {
-      // Non-adjacent dot selection jumps directly rather than racing past many photos.
+      // Non-adjacent navigation jumps directly rather than racing past many photos.
       setSnapping(true);
       setActive(next);
       setPosition(next + 1);
@@ -226,9 +225,6 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
       {count > 1 && (
         <div className="memorial-carousel-controls" aria-label="Photo carousel controls">
           <button type="button" className="memorial-carousel-arrow" onClick={() => select(active - 1)} aria-label="Previous photo">‹</button>
-          <span id={regionId} className="memorial-carousel-count" aria-live={paused ? "polite" : "off"}>
-            {active + 1} of {count}
-          </span>
           <button type="button" className="memorial-carousel-arrow" onClick={() => select(active + 1)} aria-label="Next photo">›</button>
           {!reducedMotion ? (
             <button
@@ -249,21 +245,6 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
         </div>
       )}
 
-      {count > 1 && (
-        <div className="memorial-carousel-dots" role="group" aria-label="Choose a photograph">
-          {photos.map((photo, index) => (
-            <button
-              key={photo.id}
-              type="button"
-              className={`memorial-carousel-dot${active === index ? " is-active" : ""}`}
-              onClick={() => select(index)}
-              aria-label={`Show photo ${index + 1} of ${count}`}
-              aria-current={active === index ? "true" : undefined}
-            />
-          ))}
-        </div>
-      )}
-
       <dialog
         ref={dialogRef}
         className="memorial-carousel-lightbox"
@@ -279,7 +260,6 @@ export default function MemorialPhotoCarousel({ photos, label }: Props) {
           {count > 1 && (
             <div className="memorial-carousel-lightbox-controls">
               <button type="button" onClick={() => select(active - 1)} aria-label="Previous enlarged photo">← Previous</button>
-              <span>{active + 1} of {count}</span>
               <button type="button" onClick={() => select(active + 1)} aria-label="Next enlarged photo">Next →</button>
             </div>
           )}
