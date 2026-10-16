@@ -5,7 +5,8 @@ import Link from "next/link";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { defaultMemorial, type MemorialContent } from "@/lib/memorial";
 import { michaelPhotoDataUrl } from "@/lib/michael-portrait";
-import { MEMORIAL_GALLERY_TABLE, MEMORIAL_IMAGE_BUCKET, orderGallery, type MemorialGalleryPhoto, type MemorialGalleryPlacement } from "@/lib/memorial-gallery";
+import MemorialPhotoCarousel from "@/components/MemorialPhotoCarousel";
+import { MEMORIAL_GALLERY_TABLE, MEMORIAL_IMAGE_BUCKET, orderGallery, memorialGalleryPlacements, type MemorialGalleryPhoto, type MemorialGalleryPlacement } from "@/lib/memorial-gallery";
 
 export default function MemorialSection({ variant }: { variant: "home" | "page" }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -38,20 +39,18 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
 
   function galleryAt(placement: MemorialGalleryPlacement) {
     if (!supabase) return null;
-    const photos = gallery.filter(photo => photo.placement === placement);
+    // Retain the order saved by Tierra in the admin. Each placement becomes
+    // an independent carousel; a single image is displayed without autoplay.
+    const photos = gallery
+      .filter((photo) => photo.placement === placement)
+      .map((photo) => ({
+        id: photo.id,
+        src: supabase.storage.from(MEMORIAL_IMAGE_BUCKET).getPublicUrl(photo.storage_path).data.publicUrl,
+        caption: photo.caption || "",
+      }));
     if (!photos.length) return null;
-    return (
-      <div className={`memorial-gallery-strip${photos.length === 1 ? " memorial-gallery-single" : ""}`} aria-label="Michael's photo memories">
-        {photos.map((photo, index) => {
-          const url = supabase.storage.from(MEMORIAL_IMAGE_BUCKET).getPublicUrl(photo.storage_path).data.publicUrl;
-          return <figure className="memorial-gallery-figure" key={photo.id}>
-            <img src={url} loading="lazy" decoding="async"
-              alt={photo.caption.trim() || `A memory of Michael Alexander Garza, photo ${index + 1}`} />
-            {photo.caption.trim() && <figcaption>{photo.caption}</figcaption>}
-          </figure>;
-        })}
-      </div>
-    );
+    const label = memorialGalleryPlacements.find((item) => item.id === placement)?.label || "Michael's photo memories";
+    return <MemorialPhotoCarousel key={placement} photos={photos} label={label} />;
   }
 
   const photoUrl = memorial.photo_path && supabase
