@@ -84,7 +84,7 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
             <p>{memorial.intro}</p>
             <h2>Why Camp Rise Again Exists</h2>
             <p>{memorial.tierra_story}</p>
-            <h2>His Memory. Our Mission.</h2>
+            <h2>Michael’s Legacy</h2>
             <p>{memorial.legacy}</p>
           </div>
         </div>
