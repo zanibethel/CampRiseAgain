@@ -27,6 +27,8 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
     ? supabase.storage.from("camp-rise-again-branding").getPublicUrl(memorial.photo_path).data.publicUrl
     : michaelPhotoDataUrl;
 
+  useEffect(() => { setImageFailed(false); }, [photoUrl]);
+
   const portrait = (
     <div className="memorial-photo-wrap">
       {!imageFailed ? (
