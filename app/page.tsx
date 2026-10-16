@@ -37,6 +37,7 @@ export default function Home() {
             <p>Through outdoor activities, recreation, group conversations, wellness experiences, and supportive community, Camp Rise Again creates space for people to breathe, be seen, and remember that their lives have value.</p>
             <p>This isn’t about pretending everything is okay. It’s about creating a space where you don’t have to pretend.</p>
             <p>Camp Rise Again is a community of people choosing to take another step forward—together.</p>
+            <p>Camp Rise Again is a peer-support experience built around connection, encouragement, and shared activities. It is not a clinical mental-health treatment program and does not replace professional counseling, medical care, or crisis services.</p>
           </div>
 
           <div className="cards">
