@@ -82,6 +82,8 @@ export default function MemorialSection({ variant }: { variant: "home" | "page" 
           <div className="memorial-prose">
             <h2>A life of service. A lasting legacy.</h2>
             <p>{memorial.intro}</p>
+            <h2>Beyond the Uniform</h2>
+            {memorial.personal_story.split(/\n\s*\n/).filter(Boolean).map((paragraph, index) => <p key={index}>{paragraph}</p>)}
             <h2>Why Camp Rise Again Exists</h2>
             <p>{memorial.tierra_story}</p>
             <h2>Michael’s Legacy</h2>
