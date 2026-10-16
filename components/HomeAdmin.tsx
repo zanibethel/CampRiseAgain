@@ -3,6 +3,7 @@
 import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { defaultMemorial, type MemorialContent } from "@/lib/memorial";
+import MemorialGalleryAdmin from "@/components/MemorialGalleryAdmin";
 
 type Settings = {
   id: number;
@@ -264,6 +265,7 @@ export default function HomeAdmin() {
                     <div className="field"><label>Tierra's quote (without quotation marks)</label><textarea value={settings.memorial_content.quote} onChange={(e) => updateMemorial("quote", e.target.value)} /></div>
                     <div className="field"><label>Military honors (one per line)</label><textarea style={{ minHeight: 180 }} value={settings.memorial_content.honors} onChange={(e) => updateMemorial("honors", e.target.value)} /></div>
                     <div className="field"><label>Michael's portrait</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadMemorialPhoto} disabled={uploadingMemorialPhoto} /><small>Uploading saves this image immediately to both pages; text changes save with Save Section.</small></div>
+                    <MemorialGalleryAdmin />
                     <a className="btn btn-secondary" href="/michael-garza" target="_blank" rel="noreferrer" style={{ marginBottom: 16 }}>Preview Memorial Page ↗</a>
                   </>}
 
