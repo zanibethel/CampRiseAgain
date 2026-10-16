@@ -172,3 +172,51 @@ input[type="checkbox"], input[type="radio"] {
   .navlinks .legacy-link { font-size: 12px; }
   .memorial-page-header { padding: 40px 18px 48px; }
 }
+
+/* Memorial gallery: optional photos distributed between the story sections. */
+.memorial-gallery-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  align-items: start;
+  gap: 22px;
+  margin: 26px 0 42px;
+}
+.memorial-gallery-single { grid-template-columns: minmax(0, 580px); }
+.memorial-gallery-figure { min-width: 0; margin: 0; }
+.memorial-gallery-figure img {
+  display: block; width: 100%; height: auto; max-height: 520px;
+  object-fit: contain; border-radius: 16px;
+  background: #eaf1ed; border: 1px solid var(--line);
+  box-shadow: 0 12px 28px rgba(8, 47, 36, .09);
+}
+.memorial-gallery-figure figcaption {
+  font-size: 14px; line-height: 1.55;
+  color: #476159; text-align: center; margin: 10px 3px 0;
+  overflow-wrap: anywhere; white-space: pre-line;
+}
+.memorial-gallery-admin {
+  border-top: 1px solid var(--line); padding-top: 22px; margin-top: 20px;
+  min-width: 0;
+}
+.memorial-gallery-admin h3 { font-size: 22px; margin-bottom: 10px; }
+.memorial-gallery-admin-list { display: grid; gap: 18px; margin: 18px 0 28px; }
+.memorial-gallery-admin-item {
+  display: grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr);
+  align-items: start; gap: 18px; border: 1px solid var(--line);
+  background: #fafdfb; padding: 15px; border-radius: 18px;
+}
+.memorial-gallery-admin-item img {
+  display: block; width: 100%; max-height: 220px;
+  object-fit: contain; background: #e9f0ec; border-radius: 12px;
+}
+.memorial-gallery-admin-fields { min-width: 0; }
+.memorial-gallery-admin-actions { margin: 0 0 14px; gap: 8px; }
+.memorial-gallery-admin-actions .btn { border-radius: 12px; font-size: 13px; padding: 9px 12px; }
+.memorial-gallery-admin-hint { margin: 4px 0 12px; font-size: 13px; color: var(--muted); }
+.memorial-gallery-delete { background: #fbe8e8; color: #7c2727; }
+.memorial-gallery-admin small { display: block; line-height: 1.5; color: var(--muted); }
+@media (max-width: 600px) {
+  .memorial-gallery-admin-item { grid-template-columns: minmax(0,1fr); }
+  .memorial-gallery-admin-item img { max-height: 280px; }
+  .memorial-gallery-strip { gap: 24px; }
+}
