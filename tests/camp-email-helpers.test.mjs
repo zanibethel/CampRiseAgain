@@ -27,6 +27,12 @@ test("forwards only a new reply, not quoted messages or private context", () => 
   const gmail = "Thanks for reaching out.\n\nWe can help.\n\nOn Mon, Nov 9, 2026 at 2:00 PM Someone wrote:\n> private information";
   assert.equal(newReplyText(gmail), "Thanks for reaching out.\n\nWe can help.");
   assert.equal(newReplyText("Yes\n\nFrom: Sender <sender@domain.org>\nSent: yesterday"), "Yes");
+  // Real Gmail mobile reply format observed in a Camp Rise Again relay test:
+  // Gmail puts "wrote:" on its own line after the timestamp and sender.
+  const mobileGmail = "Test reply. Let's go!!\n\nOn Mon, Nov 9, 2026 at 5:25\u202fPM Camp Rise Again <info@campriseagain.org>\nwrote:\n\n> Confidential original message";
+  assert.equal(newReplyText(mobileGmail), "Test reply. Let's go!!");
+  assert.equal(newReplyText("On Monday we wrote:\nWe should update the website."), "On Monday we wrote:\nWe should update the website.");
+
   assert.equal(newReplyText("   "), "");
   assert.equal(safeSubject("Hi\r\nBcc: injected@example.org"), "Hi Bcc: injected@example.org");
 });
