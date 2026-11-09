@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { campBridge } from "@/lib/camp-supabase-bridge";
 
 export const runtime = "nodejs";
 
@@ -35,17 +35,11 @@ export async function POST(req: Request) {
   catch { return page("Verification failed", "Please reopen the email verification link."); }
   if (!tokenIsValid(token)) return page("Verification failed", "That verification link is invalid.");
   const tokenHash = createHash("sha256").update(token).digest("hex");
-  const db = getSupabaseAdmin();
-  const { data, error } = await db.from("camp_rise_again_email_forwarders")
-    .update({
-      enabled: true, verified_at: new Date().toISOString(),
-      verification_token_hash: null, verification_expires_at: null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("verification_token_hash", tokenHash)
-    .is("verified_at", null)
-    .gt("verification_expires_at", new Date().toISOString())
-    .select("id").maybeSingle();
-  if (error || !data) return page("Verification failed", "This link was already used or has expired. Ask a Camp Rise Again administrator to resend it.");
+  try {
+    const result = await campBridge<{ verified: boolean }>("verify_email", { hash: tokenHash });
+    if (!result.verified) return page("Verification failed", "This link was already used or has expired. Ask a Camp Rise Again administrator to resend it.");
+  } catch {
+    return page("Verification unavailable", "The verification service is temporarily unavailable. Please try again shortly.");
+  }
   return page("Forwarding confirmed", "Your email address is verified. Messages for the selected Camp Rise Again inboxes can now be forwarded to you.");
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { Resend } from "resend";
-import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { campBridge } from "@/lib/camp-supabase-bridge";
 import {
   CAMP_INBOXES, inboxFromId, isAutoResponse, mailReplyRoute,
   newReplyText, parseAddress, replySignature, safeSubject,
@@ -44,24 +44,18 @@ async function handleInboxEmail(
   if (fetchError || !received) throw fetchError || new Error("Cannot read inbox email");
   const originalSender = parseAddress(received.from);
   if (!originalSender || originalSender.endsWith("@campriseagain.org")) return;
-  const db = getSupabaseAdmin();
-  const { data: forwarders, error: readError } = await db.from("camp_rise_again_email_forwarders")
-    .select("id,email,display_name,title,inboxes,enabled,verified_at")
-    .eq("enabled", true).not("verified_at", "is", null);
-  if (readError) throw readError;
+  const { forwarders } = await campBridge<{ forwarders: Forwarder[] }>("get_forwarders");
   const message = newReplyText(received.text || "").slice(0, 20000) || "(This message has no plain-text body; view the original in the Resend inbox.)";
   const subject = safeSubject(received.subject);
   const address = CAMP_INBOXES[inbox];
   for (const staff of (forwarders || []) as Forwarder[]) {
     if (!staff.inboxes.includes(inbox) || parseAddress(staff.email) === originalSender) continue;
-    const { data: route, error: routeError } = await db.from("camp_rise_again_mail_reply_routes")
-      .upsert({
-        inbound_email_id: data.email_id, forwarder_id: staff.id,
-        inbox_address: address, original_sender: originalSender,
-        original_subject: subject, original_message_id: received.message_id || null,
-      }, { onConflict: "inbound_email_id,forwarder_id,inbox_address" }).select("id").single();
-    if (routeError || !route) throw routeError || new Error("Cannot save reply route");
-    const replyAlias = "reply-" + route.id + "@campriseagain.org";
+    const { routeId } = await campBridge<{ routeId: string }>("upsert_route", {
+      inbound_email_id: data.email_id, forwarder_id: staff.id,
+      inbox_address: address, original_sender: originalSender,
+      original_subject: subject, original_message_id: received.message_id || null,
+    });
+    const replyAlias = "reply-" + routeId + "@campriseagain.org";
     const forwardText = [
       "Camp Rise Again message received at: " + address,
       "Original sender: " + String(received.from).slice(0, 300),
@@ -99,18 +93,12 @@ async function handleStaffReply(
   if (!routeId) return;
   const staffSender = parseAddress(data.from);
   if (!staffSender) return;
-  const db = getSupabaseAdmin();
-  const { data: route, error: routeError } = await db.from("camp_rise_again_mail_reply_routes")
-    .select("id,inbox_address,original_sender,original_subject,original_message_id,expires_at,forwarder_id")
-    .eq("id", routeId).single();
-  if (routeError || !route) return;
-  const target = route as ReplyRoute;
+  const { result } = await campBridge<{ result: { route: ReplyRoute; staff: Forwarder } | null }>(
+    "lookup_reply", { routeId, staffSender },
+  );
+  if (!result) return;
+  const { route: target, staff } = result;
   if (new Date(target.expires_at).getTime() < Date.now()) return;
-  const { data: forwarder, error: staffError } = await db.from("camp_rise_again_email_forwarders")
-    .select("id,email,display_name,title,inboxes,enabled,verified_at")
-    .eq("id", target.forwarder_id).single();
-  if (staffError || !forwarder) return;
-  const staff = forwarder as Forwarder;
   const inboxName = Object.keys(CAMP_INBOXES).find(
     key => CAMP_INBOXES[key as keyof typeof CAMP_INBOXES] === target.inbox_address,
   );
