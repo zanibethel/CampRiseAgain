@@ -52,3 +52,26 @@ After deploy, verify on a signed-out admin browser:
 5. Confirm non-admin emails remain blocked.
 
 Never write passwords, recovery tokens, access tokens, or user sessions to site settings, public storage, the repository, or logs. Supabase Auth stores and validates the password; client code only passes it to Supabase over the encrypted connection. The password recovery form verifies the active authenticated user's email against the existing admin allowlist.
+
+
+## Camp Rise Again email forwarding (development PR #22)
+
+Resend verified inboxes: info@campriseagain.org (general inquiries), volunteer@campriseagain.org (volunteers), forms@campriseagain.org (website forms).
+
+The admin Email Forwarding tab allows authorized staff to add, verify, pause, edit and remove forwarding recipients and their name/title signatures. Tierra's existing Gmail address is seeded to receive all three inboxes with the signature "Tierra Schofield / Founder of CampRiseAgain".
+
+### Gmail reply relay
+
+The signed inbox webhook forwards new incoming messages *from the corresponding Camp Rise Again inbox* to each approved Gmail recipient, setting a unique Reply-To alias of reply-<uuid>@campriseagain.org (90-day expiry). Gmail replies to that alias, and the inbound webhook relays newly written plain text back to the original external sender from the same Camp Rise Again inbox, adding the staff member's signature. The personal Gmail address does not become the From address on the relayed response. Direct new messages composed in Gmail, rather than replies to these forwarded notifications, are **not** relayed.
+
+New recipients must click a 24-hour verification link and explicitly submit the confirmation page (not just open the link). A disabled, unverified or removed forwarder cannot relay replies. These tables are service-role-only with RLS and no public database grants.
+
+### Activation gate
+
+1. PR checks and preview build must pass with a current Resend SDK that includes inbox APIs.
+2. Apply the private migration supabase/migrations/20261109221500_camp_email_forwarding.sql (already applied to the shared Supabase project on November 9, 2026).
+3. Add a server-only, sensitive CAMP_RESEND_API_KEY with **full-access Resend permissions**: sending-only keys cannot read inbox thread email content.
+4. Register the Resend webhook endpoint https://campriseagain.org/api/webhooks/camp-email subscribing to inbox.email.received and email.received. Save the webhook signing secret as server-only sensitive CAMP_RESEND_WEBHOOK_SECRET in Vercel. The handler only acts for the known three Camp inbox IDs or signed reply routes, not other Resend domains.
+5. Deploy after verifying webhook configuration. Perform real email-to-inbox, Gmail-forward, Gmail-reply, and recipient-delivery tests. Test unauthorized senders, unverified recipients, duplicate events, paused recipients and expired reply routes.
+
+**Privacy and limitations:** Forwarded copies and relayed replies are plain text. Original attachments stay in the Resend inbox rather than being included in Gmail forwards. Existing camper, volunteer and contact website forms still use prepared mailto messages and are not changed by this PR. Do not transmit sensitive camper records as full email attachments.
