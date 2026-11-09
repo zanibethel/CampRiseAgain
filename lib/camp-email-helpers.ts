@@ -46,7 +46,10 @@ export function newReplyText(value: unknown): string {
     const line = lines[i];
     // Gmail on mobile can wrap the quoted-message header, putting "wrote:"
     // on the following line. Match across up to three lines before stopping.
-    const quoteHeader = lines.slice(i, i + 3).join(" ").replace(/\s+/g, " ");
+    const fragment = lines.slice(i, i + 3).join(" ").replace(/\s+/g, " ");
+    const wroteAt = fragment.search(/\bwrote:/i);
+    // Ignore the quoted content after the "wrote:" marker.
+    const quoteHeader = wroteAt >= 0 ? fragment.slice(0, wroteAt + 6) : "";
     const gmailQuote = /^\s*On\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*[,\s].{8,300}\bwrote:\s*$/i.test(quoteHeader) &&
       (/\bat\s+\d{1,2}:\d{2}\b/i.test(quoteHeader) || /<[^<>\s@]+@[^<>\s@]+>/.test(quoteHeader));
     if (/^\s*>/.test(line) || gmailQuote ||
