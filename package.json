@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test:mail": "node --experimental-strip-types --test tests/camp-email-helpers.test.mjs",
     "start": "next start"
   },
   "dependencies": {
