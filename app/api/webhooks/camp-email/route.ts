@@ -44,7 +44,6 @@ async function handleInboxEmail(
   if (fetchError || !received) throw fetchError || new Error("Cannot read inbox email");
   const originalSender = parseAddress(received.from);
   if (!originalSender || originalSender.endsWith("@campriseagain.org")) return;
-  if (isAutoResponse(received.headers as Record<string, unknown> | undefined)) return;
   const db = getSupabaseAdmin();
   const { data: forwarders, error: readError } = await db.from("camp_rise_again_email_forwarders")
     .select("id,email,display_name,title,inboxes,enabled,verified_at")
