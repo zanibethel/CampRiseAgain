@@ -83,6 +83,7 @@ async function handleInboxEmail(
       replyTo: replyAlias,
       subject: "[Camp Rise Again / " + inbox + "] " + subject,
       text: forwardText,
+    }, {
       idempotencyKey: "camp-forward:" + createHash("sha256").update(data.email_id + ":" + staff.id).digest("hex"),
     });
     if (error) throw error;
@@ -137,6 +138,7 @@ async function handleStaffReply(
     subject: "Re: " + safeSubject(target.original_subject).replace(/^Re:\s*/i, ""),
     text: replyBody,
     headers,
+  }, {
     idempotencyKey: "camp-reply:" + createHash("sha256").update(emailId).digest("hex"),
   });
   if (error) throw error;
