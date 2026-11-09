@@ -47,9 +47,9 @@ export function newReplyText(value: unknown): string {
     // Gmail on mobile can wrap the quoted-message header, putting "wrote:"
     // on the following line. Match across up to three lines before stopping.
     const quoteHeader = lines.slice(i, i + 3).join(" ").replace(/\s+/g, " ");
-    const gmailQuote = /^\s*On\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*[,\s].{8,300}\bwrote:\s*$/i.test(quoteHeader);
+    const gmailQuote = /^\s*On\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*[,\s].{8,300}\bwrote:\s*$/i.test(quoteHeader) &&
+      (/\bat\s+\d{1,2}:\d{2}\b/i.test(quoteHeader) || /<[^<>\s@]+@[^<>\s@]+>/.test(quoteHeader));
     if (/^\s*>/.test(line) || gmailQuote ||
-        /^\s*On .{5,180}wrote:\s*$/i.test(line) ||
         /^\s*From:\s.+@.+$/i.test(line) ||
         /^\s*-{4,}\s*(Original Message|Forwarded Message)\s*-{4,}/i.test(line)) break;
     if (line.includes("data-smartmail")) break;
