@@ -1,0 +1,23 @@
+name: Camp Email Relay Checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feat/camp-email-forwarding-reply-relay
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm run test:mail
+      - run: npm run build
