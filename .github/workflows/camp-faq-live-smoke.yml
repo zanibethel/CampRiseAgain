@@ -1,0 +1,42 @@
+name: Camp FAQ live smoke test
+
+on:
+  push:
+    branches:
+      - test/camp-faq-live-smoke
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify each public FAQ route renders its database content
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pair in \
+            "faq|What is Camp Rise Again?" \
+            "faq/campers|Who is the camp for?" \
+            "faq/volunteers|How do I volunteer?"; do
+            path="\${pair%%|*}"
+            expected="\${pair#*|}"
+            status=$(curl -L --silent --show-error --max-time 20 \
+              -o /tmp/camp-faq.html -w '%{http_code}' \
+              "https://campriseagain.org/$path")
+            echo "$path HTTP $status"
+            test "$status" = "200"
+            grep -Fq "$expected" /tmp/camp-faq.html
+            echo "Confirmed expected question from $path"
+          done
+      - name: Verify FAQ admin endpoint is not public
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl --silent --show-error --max-time 20 \
+            -o /tmp/admin-response -w '%{http_code}' \
+            https://campriseagain.org/api/admin/faqs)
+          echo "FAQ admin without JWT HTTP $code"
+          test "$code" = "401"
