@@ -21,8 +21,8 @@ jobs:
             "faq|What is Camp Rise Again?" \
             "faq/campers|Who is the camp for?" \
             "faq/volunteers|How do I volunteer?"; do
-            path="\${pair%%|*}"
-            expected="\${pair#*|}"
+            path="${pair%%|*}"
+            expected="${pair#*|}"
             status=$(curl -L --silent --show-error --max-time 20 \
               -o /tmp/camp-faq.html -w '%{http_code}' \
               "https://campriseagain.org/$path")
