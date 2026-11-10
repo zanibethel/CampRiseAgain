@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Kind = "camper" | "volunteer" | "contact";
@@ -24,6 +24,16 @@ export default function CampSubmissionForm({ kind }: { kind: Kind }) {
   const [status, setStatus] = useState("");
   const [success, setSuccess] = useState(false);
   const requestId = useRef<string | null>(null);
+  const [contactTopic, setContactTopic] = useState("");
+  useEffect(() => {
+    if (kind !== "contact") return;
+    const topic = new URLSearchParams(window.location.search).get("topic") || "";
+    if (["Camper application","Volunteering","Camp dates or location",
+      "Donations or sponsorships","Accessibility or accommodations","General question"].includes(topic)) {
+      setContactTopic(topic);
+    }
+  }, [kind]);
+
   const isContact = kind === "contact";
   const isCamper = kind === "camper";
   const config = paths[kind];
@@ -86,7 +96,7 @@ export default function CampSubmissionForm({ kind }: { kind: Kind }) {
           <div className="field-grid">
             <div className="field"><label htmlFor="contact-phone">Phone (optional)</label><input id="contact-phone" type="tel" name="phone" autoComplete="tel" maxLength={40} /></div>
             <div className="field"><label htmlFor="contact-topic">What can we help with?</label>
-              <select id="contact-topic" name="topic" required defaultValue="">
+              <select id="contact-topic" name="topic" required value={contactTopic} onChange={event => setContactTopic(event.target.value)}>
                 <option value="" disabled>Select a topic</option>
                 <option>Camper application</option>
                 <option>Volunteering</option>
