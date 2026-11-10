@@ -1,0 +1,43 @@
+name: Camp form production smoke test
+on:
+  push:
+    branches:
+      - test/camp-form-production-smoke
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify live FAQ and form routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in /faq /faq/campers /faq/volunteers /apply /volunteer /contact; do
+            status=$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' "https://campriseagain.org$path")
+            echo "$path: HTTP $status"
+            test "$status" = "200"
+          done
+      - name: Test one controlled submission per form
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="https://campriseagain.org"
+          email="zach.perez806@gmail.com"
+          submit() {
+            local kind="$1"
+            local payload="$2"
+            local status
+            status=$(curl --silent --show-error --max-time 25 --output "/tmp/camp-$kind.json" --write-out '%{http_code}' \
+              --request POST "$target/api/$kind" -H 'Content-Type: application/json' --data-binary "$payload")
+            echo "$kind: HTTP $status"
+            if [ "$status" != "201" ]; then cat "/tmp/camp-$kind.json"; exit 1; fi
+            KIND="$kind" python3 -c 'import json,os; result=json.load(open("/tmp/camp-"+os.environ["KIND"]+".json")); assert result.get("ok") and result.get("id") and not result.get("deliveryWarning"), result; print("saved and notification requests succeeded")'
+          }
+          contact_id=$(cat /proc/sys/kernel/random/uuid)
+          volunteer_id=$(cat /proc/sys/kernel/random/uuid)
+          camper_id=$(cat /proc/sys/kernel/random/uuid)
+          submit "contact" "$(printf '{"requestId":"%s","name":"System Test Contact","email":"%s","phone":"","topic":"General question","message":"Controlled website workflow test. No action is required; this is not a real inquiry.","consent":true}' "$contact_id" "$email")"
+          submit "volunteer" "$(printf '{"requestId":"%s","firstName":"SystemTest","lastName":"Volunteer","email":"%s","phone":"555-0100","season":"both","roles":["setup"],"notes":"Automated workflow test. No action required.","consent":true}' "$volunteer_id" "$email")"
+          submit "apply" "$(printf '{"requestId":"%s","firstName":"SystemTest","lastName":"Camper","email":"%s","phone":"555-0100","season":"either","address1":"100 Example Street","address2":"","city":"Lubbock","state":"TX","postalCode":"79412","dateOfBirth":"1990-01-01","shirtSize":"M","notes":"Automated workflow test. Not a real application.","consent":true}' "$camper_id" "$email")"
