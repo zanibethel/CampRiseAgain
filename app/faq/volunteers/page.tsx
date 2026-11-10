@@ -15,7 +15,7 @@ return <><SiteHeader/><main className="form-wrap">
 <div className="eyebrow">For volunteers</div><h1>Volunteer FAQs</h1>
 <p className="section-copy">Here is what to know before submitting your interest in helping Camp Rise Again.</p>
 {questions.map(([q,a])=><details className="card" key={q} style={{ margin:"12px 0" }}><summary style={{fontWeight:700,cursor:"pointer"}}>{q}</summary><p style={{marginTop:12}}>{a}</p></details>)}
-<div className="actions" style={{marginTop:22}}><Link className="btn btn-primary" href="/volunteer">Volunteer Form</Link><Link className="btn btn-secondary" href="/contact">Ask a Question</Link></div>
+<div className="actions" style={{marginTop:22}}><Link className="btn btn-primary" href="/volunteer">Volunteer Form</Link><Link className="btn btn-secondary" href="/contact?topic=Volunteering">Ask a Question</Link></div>
 <p className="section-copy" style={{marginTop:18}}><Link href="/faq">All FAQs</Link> · <Link href="/faq/campers">Camper FAQs</Link></p>
 </main></>;
 }
