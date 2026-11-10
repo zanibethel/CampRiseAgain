@@ -16,7 +16,7 @@ return <><SiteHeader/><main className="form-wrap">
 <div className="eyebrow">For prospective campers</div><h1>Camper FAQs</h1>
 <p className="section-copy">Find answers before you apply. For a specific question, send a message directly to the Camp Rise Again team.</p>
 {questions.map(([q,a])=><details className="card" key={q} style={{ margin:"12px 0" }}><summary style={{fontWeight:700,cursor:"pointer"}}>{q}</summary><p style={{marginTop:12}}>{a}</p></details>)}
-<div className="actions" style={{marginTop:22}}><Link className="btn btn-primary" href="/apply">Apply to Attend</Link><Link className="btn btn-secondary" href="/contact">Ask a Question</Link></div>
+<div className="actions" style={{marginTop:22}}><Link className="btn btn-primary" href="/apply">Apply to Attend</Link><Link className="btn btn-secondary" href="/contact?topic=Camper%20application">Ask a Question</Link></div>
 <p className="section-copy" style={{marginTop:18}}><Link href="/faq">All FAQs</Link> · <Link href="/resources">Support resources</Link></p>
 <div className="notice">Camp Rise Again is not a crisis response service. Call 911 for immediate danger, or call or text 988 in the U.S. for crisis support.</div>
 </main></>;
