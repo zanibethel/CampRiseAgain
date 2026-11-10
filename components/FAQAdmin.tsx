@@ -2,6 +2,7 @@
 
 import { DragEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { orderedFAQs, moveFAQ, validFAQ } from "@/lib/camp-faq-editor";
 
 type Section = "general" | "campers" | "volunteers";
 type Faq = {
@@ -58,8 +59,7 @@ export default function FAQAdmin() {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const current = useMemo(() => items.filter(item=>item.section===section)
-    .sort((a,b)=>a.sort_order-b.sort_order || a.id.localeCompare(b.id)), [items,section]);
+  const current = useMemo(() => orderedFAQs(items.filter(item=>item.section===section)), [items,section]);
   const page = pages.find(x=>x.id===section) || pages[0];
 
   function startEdit(item: Faq) {
@@ -72,7 +72,7 @@ export default function FAQAdmin() {
   async function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
-    if (!newQuestion.trim() || !newAnswer.trim()) {
+    if (!validFAQ(newQuestion,newAnswer)) {
       setStatus("Enter a question and answer first.");
       return;
     }
@@ -89,7 +89,7 @@ export default function FAQAdmin() {
 
   async function save(item: Faq) {
     if (busy) return;
-    if (editQuestion.trim().length < 5 || !editAnswer.trim()) {
+    if (!validFAQ(editQuestion,editAnswer)) {
       setStatus("The question must have at least five characters and the answer cannot be empty.");
       return;
     }
@@ -158,12 +158,7 @@ export default function FAQAdmin() {
   }
 
   function move(id: string, shift: -1|1) {
-    const from=current.findIndex(x=>x.id===id);
-    const to=from+shift;
-    if (from<0 || to<0 || to>=current.length) return;
-    const ordered=[...current];
-    [ordered[from],ordered[to]]=[ordered[to],ordered[from]];
-    void applyOrder(ordered);
+    void applyOrder(moveFAQ(current,id,shift));
   }
 
   function drop(event: DragEvent<HTMLDivElement>, targetId: string) {
@@ -202,7 +197,7 @@ export default function FAQAdmin() {
       <div style={{display:"grid",gap:12}}>
         {current.length===0 && <p className="section-copy">No questions on this page. Add one below.</p>}
         {current.map((item,i)=><div className="card" key={item.id}
-          style={{padding:18,minWidth:0,opacity:busy?.9:1}}
+          style={{padding:18,minWidth:0,opacity:busy ? .9 : 1}}
           draggable={!busy && editingId!==item.id}
           onDragStart={event=>{event.dataTransfer.effectAllowed="move";setDraggingId(item.id);}}
           onDragOver={event=>{if(!busy)event.preventDefault();}}
