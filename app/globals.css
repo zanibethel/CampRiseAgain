@@ -666,3 +666,48 @@ header { z-index: 30; }
   .admin-login-or { text-align: center; }
   .admin-password-field input { min-width: 0; }
 }
+
+
+/* Past Camps: mobile-first album gallery and admin media management */
+.past-camps{margin-top:32px;}
+.camp-album-picker{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:15px;}
+.camp-album-card{border:2px solid var(--line);border-radius:18px;background:white;text-align:left;overflow:hidden;cursor:pointer;padding:0;color:var(--ink);min-width:0;transition:transform .18s ease;}
+.camp-album-card:hover{transform:translateY(-2px);}
+.camp-album-card.is-selected{border-color:var(--forest-2);box-shadow:0 8px 26px rgba(8,47,36,.13);}
+.camp-album-cover{height:160px;background:linear-gradient(135deg,#123e30,#20684e);color:#f9efd5;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:800;text-align:center;}
+.camp-album-cover img{display:block;width:100%;height:100%;object-fit:cover;}
+.camp-album-card-copy{padding:14px 16px;display:grid;gap:5px;}
+.camp-album-card-copy strong{font-size:17px;overflow-wrap:anywhere;}
+.camp-album-card-copy small{color:var(--muted);line-height:1.4;}
+.camp-album-detail{padding-top:40px;}
+.camp-album-detail h2{font-size:clamp(28px,5vw,42px);color:var(--forest);margin:10px 0;}
+.camp-album-meta{color:var(--forest-2);font-weight:700;}
+.camp-media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));gap:15px;margin-top:25px;}
+.camp-media-card{padding:0;background:white;overflow:hidden;border:1px solid var(--line);border-radius:18px;text-align:left;cursor:pointer;min-width:0;box-shadow:0 8px 24px rgba(8,47,36,.07);}
+.camp-media-card img,.camp-video-placeholder{display:block;width:100%;height:220px;object-fit:cover;}
+.camp-video-placeholder{display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;background:#143e30;color:white;}
+.camp-video-play{font-size:38px;}
+.camp-media-caption{display:block;padding:12px 14px;line-height:1.4;overflow-wrap:anywhere;}
+.camp-lightbox{position:fixed;inset:0;z-index:500;background:rgba(3,17,12,.97);color:white;display:flex;flex-direction:column;padding:16px;align-items:center;overflow:auto;}
+.camp-lightbox-toolbar,.camp-lightbox-navigation{display:flex;align-items:center;justify-content:space-between;gap:20px;width:min(100%,960px);flex-shrink:0;}
+.camp-lightbox-toolbar{padding:8px 0 14px;}
+.camp-lightbox-content{width:min(100%,960px);flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.camp-lightbox-content img,.camp-lightbox-content video{max-width:100%;max-height:75vh;object-fit:contain;border-radius:8px;}
+.camp-lightbox-content p{margin:13px 0;max-width:750px;text-align:center;}
+.camp-lightbox-navigation{padding:15px 0 8px;}
+.camp-admin-album-tabs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,180px),1fr));gap:10px;margin-bottom:15px;}
+.camp-admin-album-tab{border:2px solid var(--line);border-radius:13px;background:#fff;padding:14px;text-align:left;cursor:pointer;display:grid;gap:5px;min-width:0;}
+.camp-admin-album-tab strong{overflow-wrap:anywhere;}
+.camp-admin-album-tab small{color:var(--muted);}
+.camp-admin-media-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:16px;margin-top:20px;align-items:start;}
+.camp-admin-media-preview{display:block;width:100%;max-height:260px;min-height:150px;object-fit:contain;border-radius:12px;background:#edf2ee;}
+.camp-media-check{display:flex;align-items:flex-start;gap:10px;margin:15px 0;line-height:1.5;}
+.camp-media-check input{margin-top:4px;}
+@media(max-width:650px){
+ .camp-media-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+ .camp-media-card img,.camp-video-placeholder{height:145px;}
+ .camp-media-caption{font-size:13px;padding:10px;}
+ .camp-album-cover{height:135px;}
+ .camp-lightbox{padding:10px;}
+ .camp-lightbox-content img,.camp-lightbox-content video{max-height:68vh;}
+}
