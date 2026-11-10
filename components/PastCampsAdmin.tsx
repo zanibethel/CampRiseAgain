@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import type { CampAlbum, CampMedia } from "@/lib/camp-gallery";
+import { validGalleryUpload, canPublishGalleryMedia } from "@/lib/camp-gallery-rules";
 
 type AdminAlbum=CampAlbum & { is_published:boolean; updated_at:string };
 type AdminMedia=CampMedia & {
@@ -152,6 +153,8 @@ export default function PastCampsAdmin() {
       for(const [index,file] of files.entries()){
         setProgress("Uploading "+(index+1)+" of "+files.length+": "+file.name);
         const prepared=await prepareUpload(file);
+        if(!validGalleryUpload(prepared.mime,prepared.file.size))
+          throw new Error("File is outside the supported type or size limits.");
         const ticket=await api("admin_gallery_prepare_upload",{
           album_id:selected.id,mime_type:prepared.mime,bytes:prepared.file.size,
         });
@@ -312,6 +315,10 @@ export default function PastCampsAdmin() {
                 onChange={event=>update({is_published:event.target.checked})}/>
               <strong>Publish this {item.media_type==="photo"?"photo":"video"}</strong>
             </label>
+            {edit.is_published && !canPublishGalleryMedia({
+              media_type:item.media_type,upload_complete:item.upload_complete,
+              consent_confirmed:edit.consent_confirmed,alt_text:edit.alt_text,
+            }) && <p className="notice">To publish, confirm permission and describe the photo.</p>}
             <div className="actions" style={{gap:8}}>
               <button className="btn btn-primary" type="button" disabled={busy||!item.upload_complete}
                 onClick={()=>void command("admin_gallery_update_media",{
