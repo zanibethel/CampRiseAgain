@@ -418,6 +418,231 @@ Deno.serve(async (request: Request) => {
         : respond({ error:"FAQ list changed. Refresh before reordering." },409);
     }
 
+
+    // Past Camps galleries: media is always private in Storage and requires
+    // album publication, individual approval, complete upload and consent.
+    const GALLERY_BUCKET = "camp-rise-again-past-camps";
+    const ALBUMS_TABLE = "camp_rise_again_albums";
+    const MEDIA_TABLE = "camp_rise_again_album_media";
+    const ALBUM_FIELDS = "id,title,camp_date,location,description,sort_order,is_published,created_at,updated_at";
+    const MEDIA_FIELDS = "id,album_id,storage_path,media_type,mime_type,bytes,caption,alt_text,sort_order,upload_complete,consent_confirmed,is_published,created_at,updated_at";
+    const ALLOWED_MIME: Record<string,string> = {
+      "image/jpeg":"jpg","image/png":"png","image/webp":"webp",
+      "video/mp4":"mp4","video/webm":"webm","video/quicktime":"mov",
+    };
+    async function decorateMedia(rows: Json[], ttl: number) {
+      if (!rows.length) return [];
+      const paths = rows.map(row => String(row.storage_path));
+      const urls = new Map<string,string>();
+      for (let i=0; i<paths.length; i+=100) {
+        const batch=paths.slice(i,i+100);
+        const { data, error } = await db.storage.from(GALLERY_BUCKET)
+          .createSignedUrls(batch, ttl);
+        if (error) throw new Error("Could not sign gallery media");
+        (data || []).forEach((result,i) => {
+          // The batched signing result is aligned with the input paths.
+          if (result.signedUrl) urls.set(batch[i],result.signedUrl);
+        });
+      }
+      return rows.map(({storage_path, ...row}) => ({
+        ...row,
+        // Do not reveal raw storage paths or drafts to visitors.
+        media_url:urls.get(String(storage_path)) || null,
+      }));
+    }
+    if (action === "get_public_gallery") {
+      const { data: albums, error: albumError } = await db.from(ALBUMS_TABLE)
+        .select("id,title,camp_date,location,description,sort_order,created_at")
+        .eq("is_published",true).order("sort_order",{ascending:true})
+        .order("created_at",{ascending:false}).limit(60);
+      if (albumError) return respond({ error:"Gallery temporarily unavailable" },503);
+      const ids=(albums || []).map(x=>x.id);
+      if (!ids.length) return respond({ albums:[], media:[] });
+      const { data: media, error: mediaError } = await db.from(MEDIA_TABLE)
+        .select("id,album_id,storage_path,media_type,caption,alt_text,sort_order")
+        .in("album_id",ids)
+        .eq("upload_complete",true).eq("consent_confirmed",true)
+        .eq("is_published",true)
+        .order("sort_order",{ascending:true}).order("created_at",{ascending:true})
+        .limit(600);
+      if (mediaError) return respond({ error:"Gallery temporarily unavailable" },503);
+      const signed = await decorateMedia((media || []) as Json[],900);
+      return respond({ albums:albums || [], media:signed });
+    }
+    if (action === "admin_gallery_list") {
+      const [albumsResult,mediaResult] = await Promise.all([
+        db.from(ALBUMS_TABLE).select(ALBUM_FIELDS).order("sort_order").order("created_at"),
+        db.from(MEDIA_TABLE).select(MEDIA_FIELDS).order("sort_order").order("created_at").limit(600),
+      ]);
+      if (albumsResult.error || mediaResult.error)
+        return respond({ error:"Unable to load albums" },503);
+      const media=await decorateMedia((mediaResult.data || []).filter(
+        x => x.upload_complete) as Json[],900);
+      const previews=new Map(media.map(x=>[x.id,x.media_url]));
+      return respond({
+        albums:albumsResult.data || [],
+        media:(mediaResult.data || []).map(({storage_path, ...row})=>({
+          ...row, media_url:previews.get(row.id) || null,
+        })),
+      });
+    }
+    if (action === "admin_gallery_create_album") {
+      const title=str(params.title,150), location=str(params.location,160),
+        description=str(params.description,1200), date=str(params.camp_date,10);
+      if (title.length<3 || (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)))
+        return respond({ error:"Enter an album name and valid date" },400);
+      const { data: last } = await db.from(ALBUMS_TABLE)
+        .select("sort_order").order("sort_order",{ascending:false}).limit(1).maybeSingle();
+      const {data,error}=await db.from(ALBUMS_TABLE).insert({
+        title,location,description,camp_date:date || null,
+        sort_order:(last?.sort_order || 0)+10,is_published:false,
+      }).select(ALBUM_FIELDS).single();
+      return error?respond({ error:"Unable to create album" },503):respond({ album:data });
+    }
+    if (action === "admin_gallery_update_album") {
+      const id=str(params.id,64),title=str(params.title,150),
+        location=str(params.location,160),description=str(params.description,1200),
+        date=str(params.camp_date,10);
+      if (!UUID.test(id) || title.length<3 ||
+          (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) ||
+          typeof params.is_published!=="boolean")
+        return respond({ error:"Invalid album details" },400);
+      const {data,error}=await db.from(ALBUMS_TABLE).update({
+        title,location,description,camp_date:date || null,
+        is_published:params.is_published,updated_at:new Date().toISOString(),
+      }).eq("id",id).select(ALBUM_FIELDS).maybeSingle();
+      return error?respond({ error:"Unable to update album" },503):
+        data?respond({ album:data }):respond({ error:"Album not found" },404);
+    }
+    if (action === "admin_gallery_delete_album") {
+      const id=str(params.id,64);
+      if (!UUID.test(id)) return respond({ error:"Invalid album" },400);
+      const {count,error:countError}=await db.from(MEDIA_TABLE)
+        .select("id",{count:"exact",head:true}).eq("album_id",id);
+      if (countError) return respond({ error:"Unable to verify album contents" },503);
+      if (count) return respond({ error:"Remove album media before deleting the album." },409);
+      const {data,error}=await db.from(ALBUMS_TABLE)
+        .delete().eq("id",id).select("id").maybeSingle();
+      return error?respond({ error:"Could not delete album" },503):
+        data?respond({ ok:true }):respond({ error:"Album not found" },404);
+    }
+    if (action === "admin_gallery_prepare_upload") {
+      const albumId=str(params.album_id,64), mime=str(params.mime_type,60),
+        size=Number(params.bytes), mediaType = mime.startsWith("image/")?"photo":"video";
+      if (!UUID.test(albumId) || !ALLOWED_MIME[mime] || !Number.isInteger(size) ||
+          size<1 || size>47185920 || (mediaType==="photo" && size>10485760)) {
+        return respond({ error:"Unsupported file type or file is too large (photos 10 MB, videos 45 MB)." },400);
+      }
+      const {data:album}=await db.from(ALBUMS_TABLE).select("id")
+        .eq("id",albumId).maybeSingle();
+      if (!album) return respond({ error:"Album not found" },404);
+      const mediaId=crypto.randomUUID();
+      const path="albums/"+albumId+"/"+mediaId+"."+ALLOWED_MIME[mime];
+      const {data:last}=await db.from(MEDIA_TABLE).select("sort_order")
+        .eq("album_id",albumId).order("sort_order",{ascending:false}).limit(1).maybeSingle();
+      const {error:insertError}=await db.from(MEDIA_TABLE).insert({
+        id:mediaId,album_id:albumId,storage_path:path,media_type:mediaType,
+        mime_type:mime,bytes:size,sort_order:(last?.sort_order || 0)+10,
+        upload_complete:false,is_published:false,consent_confirmed:false,
+      });
+      if (insertError) return respond({ error:"Could not prepare media upload" },503);
+      const {data:token,error:signError}=await db.storage.from(GALLERY_BUCKET)
+        .createSignedUploadUrl(path);
+      if (signError || !token) {
+        await db.from(MEDIA_TABLE).delete().eq("id",mediaId);
+        return respond({ error:"Unable to authorize media upload" },503);
+      }
+      return respond({ mediaId, path, uploadToken:token.token,
+        bucket:GALLERY_BUCKET, expiresInSeconds:7200 });
+    }
+    if (action === "admin_gallery_finalize_upload") {
+      const id=str(params.id,64);
+      if (!UUID.test(id)) return respond({ error:"Invalid media item" },400);
+      const {data:row,error:readError}=await db.from(MEDIA_TABLE)
+        .select("id,storage_path,mime_type,bytes,upload_complete")
+        .eq("id",id).maybeSingle();
+      if (readError || !row) return respond({ error:"Media item not found" },404);
+      if (row.upload_complete) return respond({ ok:true });
+      const {data:details,error:infoError}=await db.storage.from(GALLERY_BUCKET)
+        .info(row.storage_path);
+      if (infoError || !details) return respond({ error:"Upload not found. Try uploading again." },409);
+      // Do not trust a browser-submitted MIME or file size after upload.
+      const actualSize=Number(details.size);
+      const actualMime=str(details.contentType || details.mimeType,60);
+      if (!Number.isFinite(actualSize) || actualSize<1 ||
+          actualSize>47185920 || actualSize>row.bytes ||
+          actualMime!==row.mime_type) {
+        await db.storage.from(GALLERY_BUCKET).remove([row.storage_path]);
+        return respond({ error:"Uploaded file did not match the authorized type or size." },409);
+      }
+      const {error}=await db.from(MEDIA_TABLE).update({
+        upload_complete:true,updated_at:new Date().toISOString(),
+      }).eq("id",id);
+      return error?respond({ error:"Unable to finish upload" },503):respond({ ok:true });
+    }
+    if (action === "admin_gallery_update_media") {
+      const id=str(params.id,64),caption=str(params.caption,700),
+        alt=str(params.alt_text,200), consent=params.consent_confirmed,
+        publish=params.is_published;
+      if (!UUID.test(id) || typeof consent!=="boolean" ||
+          typeof publish!=="boolean" ||
+          (publish && (!consent || alt.length<5 && params.media_type==="photo")))
+        return respond({ error:"Confirm consent and add a description before publishing a photo." },400);
+      const {data:old}=await db.from(MEDIA_TABLE).select("upload_complete,media_type")
+        .eq("id",id).maybeSingle();
+      if (!old) return respond({ error:"Media not found" },404);
+      if (publish && (!old.upload_complete || !consent ||
+          (old.media_type==="photo" && alt.length<5))) {
+        return respond({ error:"Finish uploading, confirm publication permission, and describe the photo first." },400);
+      }
+      const {data,error}=await db.from(MEDIA_TABLE)
+        .update({caption,alt_text:alt,consent_confirmed:consent,
+          is_published:publish,updated_at:new Date().toISOString()})
+        .eq("id",id).select(MEDIA_FIELDS).maybeSingle();
+      return error?respond({ error:"Could not save media" },503):
+        data?respond({ media:data }):respond({ error:"Media not found" },404);
+    }
+    if (action === "admin_gallery_delete_media") {
+      const id=str(params.id,64);
+      if (!UUID.test(id)) return respond({ error:"Invalid media" },400);
+      const {data:row}=await db.from(MEDIA_TABLE).select("id,storage_path")
+        .eq("id",id).maybeSingle();
+      if (!row) return respond({ error:"Media not found" },404);
+      const {error:removeError}=await db.storage.from(GALLERY_BUCKET)
+        .remove([row.storage_path]);
+      if (removeError) return respond({ error:"Could not delete the stored file. Try again." },503);
+      const {error}=await db.from(MEDIA_TABLE).delete().eq("id",id);
+      return error?respond({ error:"Could not remove media record" },503):respond({ ok:true });
+    }
+    if (action === "admin_gallery_move") {
+      const kind=str(params.kind,10),id=str(params.id,64),
+        direction=Number(params.direction);
+      if (!UUID.test(id) || !["album","media"].includes(kind) ||
+          ![-1,1].includes(direction)) return respond({ error:"Invalid reorder request" },400);
+      const table=kind==="album"?ALBUMS_TABLE:MEDIA_TABLE;
+      const {data:source}=await db.from(table)
+        .select(kind==="album"?"id,sort_order":"id,sort_order,album_id")
+        .eq("id",id).maybeSingle();
+      if (!source) return respond({ error:"Item not found" },404);
+      let q=db.from(table).select("id,sort_order");
+      if (kind==="media") q=q.eq("album_id",source.album_id);
+      const {data:rows,error:lookupError}=await q.order("sort_order")
+        .order("created_at").limit(600);
+      if (lookupError) return respond({ error:"Could not load media order" },503);
+      const index=(rows || []).findIndex(r=>r.id===id),adjacent=(rows || [])[index+direction];
+      if (index<0 || !adjacent) return respond({ ok:true });
+      // Normalize group order after swapping neighboring items.
+      const ordered=[...(rows||[])];
+      [ordered[index],ordered[index+direction]]=
+        [ordered[index+direction],ordered[index]];
+      for(const [i,item] of ordered.entries()){
+        const {error}=await db.from(table).update({sort_order:(i+1)*10})
+          .eq("id",item.id);
+        if(error)return respond({ error:"Could not save order; refresh and retry" },503);
+      }
+      return respond({ ok:true });
+    }
+
     return respond({ error: "Unsupported action" }, 400);
   } catch {
     return respond({ error: "Private database operation failed" }, 503);
