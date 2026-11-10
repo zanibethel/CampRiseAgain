@@ -76,6 +76,7 @@ Deno.serve(async (request: Request) => {
   });
 
   const needsAdmin = action.startsWith("admin_");
+  let adminEmail: string | null = null;
   if (needsAdmin) {
     const userToken = str(input.userToken, 4096);
     if (!userToken) return respond({ error: "Admin authentication required" }, 403);
@@ -85,6 +86,7 @@ Deno.serve(async (request: Request) => {
         !ADMIN_EMAILS.has(user.email?.toLowerCase() || "")) {
       return respond({ error: "Admin access denied" }, 403);
     }
+    adminEmail = user.email?.toLowerCase() || null;
   }
 
   try {
@@ -326,6 +328,94 @@ Deno.serve(async (request: Request) => {
       const { data, error } = await db.from(table).select("*").eq("id",id).maybeSingle();
       if (error) return respond({ error: "Could not load submission" }, 503);
       return data ? respond({ submission: data }) : respond({ error: "Not found" }, 404);
+    }
+
+    // FAQ content. The Vercel server may read published items; all writes and
+    // draft reads require the verified Camp Rise Again admin JWT above.
+    if (action === "get_public_faqs") {
+      const section = str(params.section, 20);
+      if (!["general","campers","volunteers"].includes(section))
+        return respond({ error: "Unknown FAQ section" }, 400);
+      const { data, error } = await db.from("camp_rise_again_faq_items")
+        .select("id,question,answer")
+        .eq("section",section).eq("is_published",true)
+        .order("sort_order",{ascending:true}).order("created_at",{ascending:true});
+      return error ? respond({ error: "FAQs unavailable" }, 503)
+        : respond({ faqs: data || [] });
+    }
+    if (action === "admin_faq_list") {
+      const { data, error } = await db.from("camp_rise_again_faq_items")
+        .select("id,section,question,answer,is_published,sort_order,updated_at,updated_by")
+        .order("section",{ascending:true}).order("sort_order",{ascending:true})
+        .order("created_at",{ascending:true});
+      return error ? respond({ error: "Unable to list FAQs" }, 503)
+        : respond({ faqs:data || [] });
+    }
+    if (action === "admin_faq_create") {
+      const section = str(params.section,20);
+      const question = str(params.question,240);
+      const answer = str(params.answer,3000);
+      if (!["general","campers","volunteers"].includes(section) ||
+          question.length < 5 || !answer)
+        return respond({ error: "Choose a page, question, and answer" }, 400);
+      // Newly created items remain drafts until someone deliberately publishes.
+      const { data: last, error: orderError } = await db.from("camp_rise_again_faq_items")
+        .select("sort_order").eq("section",section)
+        .order("sort_order",{ascending:false}).limit(1).maybeSingle();
+      if (orderError) return respond({ error: "Cannot calculate FAQ order" }, 503);
+      const { data, error } = await db.from("camp_rise_again_faq_items")
+        .insert({ section, question, answer,
+          is_published:false, sort_order:(last?.sort_order || 0)+10,
+          updated_by:adminEmail })
+        .select("id,section,question,answer,is_published,sort_order,updated_at,updated_by").single();
+      if (error) return respond({ error:error.code === "23505" ?
+        "This question already exists on that page." : "Unable to create FAQ" }, error.code === "23505" ? 409 : 503);
+      return respond({ item:data });
+    }
+    if (action === "admin_faq_update") {
+      const id = str(params.id,64);
+      const section = str(params.section,20);
+      const question = str(params.question,240);
+      const answer = str(params.answer,3000);
+      const updatedAt = str(params.updated_at,80);
+      if (!UUID.test(id) || !["general","campers","volunteers"].includes(section) ||
+          question.length < 5 || !answer || typeof params.is_published !== "boolean" ||
+          !updatedAt) return respond({ error: "Complete the FAQ fields" }, 400);
+      // Prevent an older admin tab from overwriting a newer change.
+      const { data, error } = await db.from("camp_rise_again_faq_items")
+        .update({ question, answer, is_published:params.is_published,
+          updated_at:new Date().toISOString(), updated_by:adminEmail })
+        .eq("id",id).eq("section",section).eq("updated_at",updatedAt)
+        .select("id,section,question,answer,is_published,sort_order,updated_at,updated_by")
+        .maybeSingle();
+      if (error) return respond({ error:error.code === "23505" ?
+        "A matching question already exists on this page." : "Unable to update FAQ" },error.code === "23505" ? 409:503);
+      return data ? respond({ item:data })
+        : respond({ error:"This FAQ changed elsewhere. Refresh before editing." },409);
+    }
+    if (action === "admin_faq_delete") {
+      const id = str(params.id,64);
+      const section = str(params.section,20);
+      if (!UUID.test(id) || !["general","campers","volunteers"].includes(section))
+        return respond({ error:"Invalid FAQ" },400);
+      const { data, error } = await db.from("camp_rise_again_faq_items")
+        .delete().eq("id",id).eq("section",section).select("id").maybeSingle();
+      if (error) return respond({ error:"Unable to delete FAQ" },503);
+      return data ? respond({ ok:true }) : respond({ error:"FAQ not found" },404);
+    }
+    if (action === "admin_faq_reorder") {
+      const section = str(params.section,20);
+      const ids = params.ids;
+      if (!["general","campers","volunteers"].includes(section) ||
+          !Array.isArray(ids) || ids.length > 100 ||
+          ids.some(id => typeof id !== "string" || !UUID.test(id)) ||
+          new Set(ids).size !== ids.length)
+        return respond({ error:"Invalid FAQ order" },400);
+      const { data, error } = await db.rpc("camp_rise_again_reorder_faqs",
+        { p_section:section, p_ids:ids });
+      if (error) return respond({ error:"Unable to reorder FAQs" },503);
+      return data === true ? respond({ ok:true })
+        : respond({ error:"FAQ list changed. Refresh before reordering." },409);
     }
 
     return respond({ error: "Unsupported action" }, 400);
