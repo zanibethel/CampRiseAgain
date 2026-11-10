@@ -11,13 +11,24 @@ export const FORM_MAILBOX: Record<CampFormKind, {
   contact: { inbox: "info", address: "info@campriseagain.org", label: "Contact question" },
 };
 
+export function resolveFormMailbox(kind: CampFormKind, topic = "") {
+  if (kind !== "contact") return FORM_MAILBOX[kind];
+  if (topic === "Volunteering") {
+    return { inbox: "volunteer" as const, address: FORM_MAILBOX.volunteer.address, label: "Contact question" };
+  }
+  if (topic === "Camper application") {
+    return { inbox: "forms" as const, address: FORM_MAILBOX.camper.address, label: "Contact question" };
+  }
+  return FORM_MAILBOX.contact;
+}
+
 /**
  * Never include application answers, dates of birth, address, health context,
  * freeform notes, or the message body in an emailed staff notification.
  * Those belong in the admin portal only.
  */
-export function staffFormNotice(kind: CampFormKind, id: string, name: string): string {
-  const route = FORM_MAILBOX[kind];
+export function staffFormNotice(kind: CampFormKind, id: string, name: string, topic = ""): string {
+  const route = resolveFormMailbox(kind, topic);
   return [
     "A new " + route.label.toLowerCase() + " was submitted on campriseagain.org.",
     "Reference: " + id,
