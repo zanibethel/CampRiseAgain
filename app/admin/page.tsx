@@ -8,10 +8,11 @@ import MemorialGalleryAdmin from "@/components/MemorialGalleryAdmin";
 import VisitorAnalyticsAdmin from "@/components/VisitorAnalyticsAdmin";
 import EmailForwardingAdmin from "@/components/EmailForwardingAdmin";
 import SubmissionsAdmin from "@/components/SubmissionsAdmin";
+import FAQAdmin from "@/components/FAQAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const ADMINS = ["schofieldtierra@gmail.com", "zanibethel@gmail.com"];
-type AdminSection = "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "submissions";
+type AdminSection = "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "submissions" | "faq";
 
 type ResourceItem = {
   id: number;
@@ -343,6 +344,7 @@ export default function AdminPage() {
     { id: "home", label: "Home Page", description: "Sections, logo, copy, and display order" },
     { id: "memorial", label: "Michael’s Photos", description: "Upload, arrange, and caption his story photos" },
     { id: "resources", label: "Resources Page", description: "Support links and display order" },
+    { id: "faq", label: "Frequently Asked Questions", description: "Edit, publish and arrange General, Camper, and Volunteer FAQs" },
     { id: "staff", label: "Meet the Staff", description: "Staff profiles, photos, and visibility" },
   ];
 
@@ -358,6 +360,7 @@ export default function AdminPage() {
       {activeSection === "analytics" && <VisitorAnalyticsAdmin />}
       {activeSection === "email" && <EmailForwardingAdmin />}
       {activeSection === "submissions" && <SubmissionsAdmin />}
+      {activeSection === "faq" && <FAQAdmin />}
       {activeSection === "home" && <HomeAdmin />}
 
       {activeSection === "memorial" && <section className="form-card" aria-label="Michael’s photos editor"><h2>Michael’s Photos</h2><p className="section-copy">Upload multiple photos and place them throughout Michael’s story. Add captions, change positions, and rearrange or hide individual photos. Changes save directly to the website without changing his main portrait.</p><div className="actions" style={{ marginBottom: 20 }}><a className="btn btn-secondary" href="/michael-garza" target="_blank" rel="noreferrer">View Our Story ↗</a></div><MemorialGalleryAdmin /></section>}
