@@ -11,7 +11,9 @@
 |---|---|---|---|
 | Camper | forms@campriseagain.org | forms inbox recipients | forms@campriseagain.org |
 | Volunteer | volunteer@campriseagain.org | volunteer inbox recipients | volunteer@campriseagain.org |
-| Contact | info@campriseagain.org | info inbox recipients | info@campriseagain.org |
+| Contact (general) | info@campriseagain.org | info inbox recipients | info@campriseagain.org |
+| Contact (volunteering topic) | volunteer@campriseagain.org | volunteer inbox recipients | volunteer@campriseagain.org |
+| Contact (camper application topic) | forms@campriseagain.org | forms inbox recipients | forms@campriseagain.org |
 
 Staff notifications contain only a reference number, name and admin-review link, never camper addresses, birthdays, notes, or full contact messages. Each notification has a private `reply-<id>@campriseagain.org` Reply-To address. Verified recipients reply from Gmail, and the existing Resend webhook sends back from the original organization inbox with their saved name/title signature. These are not emails initiated directly in Gmail.
 
