@@ -11,7 +11,7 @@ test("each web form uses its respective Camp Rise Again sender and forwarding in
 test("staff notifications contain only reference and safe summary, never private form answers", () => {
   const id = "c4d628ee-51d4-4d86-9a77-bd9f563ca0ed";
   const notice = staffFormNotice("camper", id, "Sample Applicant");
-  assert.match(notice, /New camper application/);
+  assert.match(notice, /new camper application/);
   assert.ok(notice.includes(id));
   assert.ok(notice.includes("https://campriseagain.org/admin"));
   assert.ok(notice.includes("forms@campriseagain.org"));
