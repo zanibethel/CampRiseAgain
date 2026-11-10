@@ -439,9 +439,9 @@ Deno.serve(async (request: Request) => {
         const { data, error } = await db.storage.from(GALLERY_BUCKET)
           .createSignedUrls(batch, ttl);
         if (error) throw new Error("Could not sign gallery media");
-        (data || []).forEach((result) => {
-          if (result.signedUrl && result.path)
-            urls.set(result.path, result.signedUrl);
+        (data || []).forEach((result,i) => {
+          // The batched signing result is aligned with the input paths.
+          if (result.signedUrl) urls.set(batch[i],result.signedUrl);
         });
       }
       return rows.map(({storage_path, ...row}) => ({
@@ -466,7 +466,7 @@ Deno.serve(async (request: Request) => {
         .order("sort_order",{ascending:true}).order("created_at",{ascending:true})
         .limit(600);
       if (mediaError) return respond({ error:"Gallery temporarily unavailable" },503);
-      const signed = await decorateMedia((media || []) as Json[],3600);
+      const signed = await decorateMedia((media || []) as Json[],900);
       return respond({ albums:albums || [], media:signed });
     }
     if (action === "admin_gallery_list") {
@@ -631,8 +631,7 @@ Deno.serve(async (request: Request) => {
       if (lookupError) return respond({ error:"Could not load media order" },503);
       const index=(rows || []).findIndex(r=>r.id===id),adjacent=(rows || [])[index+direction];
       if (index<0 || !adjacent) return respond({ ok:true });
-      const oldOrder=Number(source.sort_order), otherOrder=Number(adjacent.sort_order);
-      // Use the midpoint when possible; otherwise rebalance within this group.
+      // Normalize group order after swapping neighboring items.
       const ordered=[...(rows||[])];
       [ordered[index],ordered[index+direction]]=
         [ordered[index+direction],ordered[index]];
