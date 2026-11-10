@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { FORM_MAILBOX, staffFormNotice, applicantReceipt } from "../lib/camp-form-routing.ts";
+import { FORM_MAILBOX, resolveFormMailbox, staffFormNotice, applicantReceipt } from "../lib/camp-form-routing.ts";
 
 test("each web form uses its respective Camp Rise Again sender and forwarding inbox", () => {
   assert.deepEqual(FORM_MAILBOX.camper, { inbox: "forms", address: "forms@campriseagain.org", label: "Camper application" });
@@ -27,4 +27,13 @@ test("confirmation is appropriate but never promises placement or an instant res
   assert.ok(message.includes("988"));
   const volunteer = applicantReceipt("volunteer", "sample-id", "Sample");
   assert.ok(volunteer.includes("volunteer interest form"));
+});
+
+test("FAQ contact topics route questions to the right inbox while preserving contact message type", () => {
+  assert.deepEqual(resolveFormMailbox("contact","Volunteering"),
+    { inbox:"volunteer", address:"volunteer@campriseagain.org", label:"Contact question" });
+  assert.deepEqual(resolveFormMailbox("contact","Camper application"),
+    { inbox:"forms", address:"forms@campriseagain.org", label:"Contact question" });
+  assert.deepEqual(resolveFormMailbox("contact","General question"),FORM_MAILBOX.contact);
+  assert.ok(staffFormNotice("contact","ref-1","Sample","Volunteering").includes("volunteer@campriseagain.org"));
 });
