@@ -1,15 +1,12 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { Resend } from "resend";
 import { campBridge } from "@/lib/camp-supabase-bridge";
+import { FORM_MAILBOX, staffFormNotice, applicantReceipt } from "@/lib/camp-form-routing";
+
 
 export type SubmissionKind = "camper" | "volunteer" | "contact";
 type Forwarder = { id: string; email: string; inboxes: string[]; enabled: boolean; verified_at: string | null };
 
-const ROUTES: Record<SubmissionKind, { inbox: "info" | "volunteer" | "forms"; address: string; label: string }> = {
-  camper: { inbox: "forms", address: "forms@campriseagain.org", label: "Camper application" },
-  volunteer: { inbox: "volunteer", address: "volunteer@campriseagain.org", label: "Volunteer application" },
-  contact: { inbox: "info", address: "info@campriseagain.org", label: "Contact question" },
-};
 
 function rateFingerprint(request: Request, kind: SubmissionKind): string {
   const secret = process.env.CAMP_SUPABASE_BRIDGE_TOKEN;
@@ -56,7 +53,7 @@ export async function handleCampSubmission(request: Request, kind: SubmissionKin
   const requestId = typeof body.requestId === "string" &&
     /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.requestId)
     ? body.requestId : randomUUID();
-  const receipt = ROUTES[kind];
+  const receipt = FORM_MAILBOX[kind];
   let id: string;
   let duplicate = false;
   try {
@@ -87,16 +84,7 @@ export async function handleCampSubmission(request: Request, kind: SubmissionKin
   const name = kind === "contact" ? safe(body.name) :
     [safe(body.firstName),safe(body.lastName)].filter(Boolean).join(" ");
   const staffSubject = "[Camp Rise Again / " + receipt.inbox + "] New " + receipt.label + " — " + id.slice(0,8);
-  const summary = [
-    "A new " + receipt.label.toLowerCase() + " was submitted on campriseagain.org.",
-    "Reference: " + id,
-    "Submitted by: " + name,
-    "The full information is available only in the protected admin portal.",
-    "Review: https://campriseagain.org/admin (Submissions tab)",
-    "",
-    "Reply in Gmail to answer the applicant from " + receipt.address + ".",
-    "Do not send private camper application details in an email.",
-  ].join("\n");
+  const summary = staffFormNotice(kind, id, name);
 
   let notificationFailure = false;
   try {
@@ -129,21 +117,7 @@ export async function handleCampSubmission(request: Request, kind: SubmissionKin
     console.error("[camp-forms] Failed to queue staff notifications", kind);
   }
 
-  const confirmation = [
-    "Thank you for contacting Camp Rise Again" + (name ? ", " + name : "") + ".",
-    "",
-    kind === "camper"
-      ? "We received your camper application. Submitting an application does not confirm a place at camp."
-      : kind === "volunteer"
-        ? "We received your volunteer interest form. A team member may contact you about opportunities."
-        : "We received your message. Our team will review it.",
-    "Your reference number: " + id,
-    "",
-    "If this is an emergency, call 911. In the U.S., call or text 988 for immediate mental-health crisis support.",
-    "Camp Rise Again is a peer-support camp, not a crisis or clinical treatment service.",
-    "",
-    "Camp Rise Again",
-  ].join("\n");
+  const confirmation = applicantReceipt(kind, id, name);
   const { error: confirmationError } = await resend.emails.send({
     from: "Camp Rise Again <" + receipt.address + ">",
     to: [applicantEmail],
