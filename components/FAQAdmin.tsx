@@ -145,11 +145,9 @@ export default function FAQAdmin() {
       await call("PATCH",{
         action:"reorder",section,ids:newOrder.map(x=>x.id),
       });
-      // Persisted ordering, not browser-only visual order.
-      setItems(all=>all.map(item=>{
-        const index=newOrder.findIndex(x=>x.id===item.id);
-        return index<0?item:{...item,sort_order:(index+1)*10};
-      }));
+      // Reload authoritative timestamps to avoid overwriting a reordered FAQ
+      // with a stale edit from a second browser session.
+      await refresh();
       setStatus("FAQ order saved.");
     } catch(error) {
       setStatus(error instanceof Error ? error.message : "Could not reorder FAQs.");
