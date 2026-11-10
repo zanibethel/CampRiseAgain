@@ -8,6 +8,7 @@ const mobileLinks = [
   { href: "/", label: "Home" },
   { href: "/#about", label: "About the Camp" },
   { href: "/resources", label: "Resources" },
+  { href: "/faq", label: "FAQs" },
   { href: "/michael-garza", label: "Our Story" },
   { href: "/#contact", label: "Contact" },
   { href: "/apply", label: "Apply", kind: "apply" },
@@ -56,6 +57,7 @@ export default function SiteHeader() {
           <nav className="navlinks desktop-nav" aria-label="Primary navigation">
             <a href="/#about">About</a>
             <a className="resources-link" href="/resources">Resources</a>
+            <a href="/faq">FAQs</a>
             <a className="legacy-link" href="/michael-garza">Our Story</a>
             <a href="/#contact">Contact</a>
             <a className="btn btn-primary" href="/apply">Apply</a>

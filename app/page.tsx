@@ -67,8 +67,8 @@ export default function Home() {
         <section id="contact" data-home-section="contact" className="section">
           <div className="eyebrow">Contact</div>
           <h2>Questions before you apply?</h2>
-          <p className="section-copy" data-managed-contact-copy>Send us a message and your email app will open with your answers already included so you can review and send it directly.</p>
-          <div className="actions"><Link className="btn btn-primary" href="/contact">Contact Us</Link></div>
+          <p className="section-copy" data-managed-contact-copy>Send a question directly to our team using the secure contact form. You can also explore the camper and volunteer FAQs before applying.</p>
+          <div className="actions"><Link className="btn btn-primary" href="/contact">Contact Us</Link><Link className="btn btn-secondary" href="/faq">Frequently Asked Questions</Link></div>
           <p className="section-copy"><strong>Camp Rise Again is not a crisis service.</strong> If you or someone else is in immediate danger, call 911. In the U.S., you can also call or text 988 for the Suicide & Crisis Lifeline.</p>
         </section>
       </main>

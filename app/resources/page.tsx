@@ -43,6 +43,7 @@ export default function ResourcesPage() {
           <div className="actions">
             <Link className="btn btn-primary" href="/apply">Apply to Attend</Link>
             <Link className="btn btn-secondary" href="/contact">Contact Us</Link>
+            <Link className="btn btn-secondary" href="/faq">FAQs</Link>
           </div>
         </section>
 
