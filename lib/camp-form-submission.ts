@@ -1,7 +1,7 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { Resend } from "resend";
 import { campBridge } from "@/lib/camp-supabase-bridge";
-import { FORM_MAILBOX, staffFormNotice, applicantReceipt } from "@/lib/camp-form-routing";
+import { resolveFormMailbox, staffFormNotice, applicantReceipt } from "@/lib/camp-form-routing";
 
 
 export type SubmissionKind = "camper" | "volunteer" | "contact";
@@ -53,7 +53,8 @@ export async function handleCampSubmission(request: Request, kind: SubmissionKin
   const requestId = typeof body.requestId === "string" &&
     /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(body.requestId)
     ? body.requestId : randomUUID();
-  const receipt = FORM_MAILBOX[kind];
+  const topic = kind === "contact" && typeof body.topic === "string" ? body.topic : "";
+  const receipt = resolveFormMailbox(kind,topic);
   let id: string;
   let duplicate = false;
   try {
@@ -84,7 +85,7 @@ export async function handleCampSubmission(request: Request, kind: SubmissionKin
   const name = kind === "contact" ? safe(body.name) :
     [safe(body.firstName),safe(body.lastName)].filter(Boolean).join(" ");
   const staffSubject = "[Camp Rise Again / " + receipt.inbox + "] New " + receipt.label + " — " + id.slice(0,8);
-  const summary = staffFormNotice(kind, id, name);
+  const summary = staffFormNotice(kind, id, name,topic);
 
   let notificationFailure = false;
   try {
