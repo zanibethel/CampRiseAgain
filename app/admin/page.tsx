@@ -7,10 +7,11 @@ import TeamAdmin from "@/components/TeamAdmin";
 import MemorialGalleryAdmin from "@/components/MemorialGalleryAdmin";
 import VisitorAnalyticsAdmin from "@/components/VisitorAnalyticsAdmin";
 import EmailForwardingAdmin from "@/components/EmailForwardingAdmin";
+import SubmissionsAdmin from "@/components/SubmissionsAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const ADMINS = ["schofieldtierra@gmail.com", "zanibethel@gmail.com"];
-type AdminSection = "home" | "memorial" | "resources" | "staff" | "analytics" | "email";
+type AdminSection = "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "submissions";
 
 type ResourceItem = {
   id: number;
@@ -338,6 +339,7 @@ export default function AdminPage() {
   const tabs: { id: AdminSection; label: string; description: string }[] = [
     { id: "analytics", label: "Visitor Analytics", description: "Visitors, page views, trends, and top pages" },
     { id: "email", label: "Email Forwarding", description: "Gmail forwarding recipients and reply signatures" },
+    { id: "submissions", label: "Form Submissions", description: "Review camper, volunteer and contact forms privately" },
     { id: "home", label: "Home Page", description: "Sections, logo, copy, and display order" },
     { id: "memorial", label: "Michael’s Photos", description: "Upload, arrange, and caption his story photos" },
     { id: "resources", label: "Resources Page", description: "Support links and display order" },
@@ -355,6 +357,7 @@ export default function AdminPage() {
       <div id="admin-section-content" style={{ scrollMarginTop: 20 }}>
       {activeSection === "analytics" && <VisitorAnalyticsAdmin />}
       {activeSection === "email" && <EmailForwardingAdmin />}
+      {activeSection === "submissions" && <SubmissionsAdmin />}
       {activeSection === "home" && <HomeAdmin />}
 
       {activeSection === "memorial" && <section className="form-card" aria-label="Michael’s photos editor"><h2>Michael’s Photos</h2><p className="section-copy">Upload multiple photos and place them throughout Michael’s story. Add captions, change positions, and rearrange or hide individual photos. Changes save directly to the website without changing his main portrait.</p><div className="actions" style={{ marginBottom: 20 }}><a className="btn btn-secondary" href="/michael-garza" target="_blank" rel="noreferrer">View Our Story ↗</a></div><MemorialGalleryAdmin /></section>}
