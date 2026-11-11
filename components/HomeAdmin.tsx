@@ -72,7 +72,7 @@ const defaults: Settings = {
   keep_going_copy: "There is still hope.\nYou can rise again.",
   donate_heading: "Help make Camp Rise Again possible.",
   donate_copy: CAMP_DONATE_COPY,
-  gofundme_url: "https://gofund.me/4e650f52a",
+  gofundme_url: "https://gofund.me/80cd44483",
   contact_heading: "Questions before you apply?",
   contact_copy: "Send us a message and your email app will open with your answers already included so you can review and send it directly.",
   logo_path: "",
