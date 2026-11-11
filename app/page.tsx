@@ -49,6 +49,10 @@ export default function Home() {
           <div className="eyebrow">Our mission</div>
           <h2>Why we rise again.</h2>
           <p className="section-copy" data-managed-mission>{CAMP_MISSION_STATEMENT}</p>
+          <div className="mission-attribution" data-managed-mission-attribution>
+            <span className="mission-attribution-name" data-managed-mission-author-name>Tierra Schofield</span>
+            <span className="mission-attribution-title" data-managed-mission-author-title>Founder, Camp Rise Again</span>
+          </div>
         </section>
 
         <MemorialSection variant="home" />

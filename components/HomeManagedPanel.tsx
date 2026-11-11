@@ -14,7 +14,7 @@ export default function HomeManagedPanel() {
     if (pathname !== "/" || !supabase) return;
 
     Promise.all([
-      supabase.from("site_settings").select("announcement,hero_heading,hero_lead,slogan,mission_statement,about_heading,about_copy,fall_details,spring_details,keep_going_heading,keep_going_copy,donate_heading,donate_copy,contact_heading,contact_copy,home_section_order").eq("id", 1).maybeSingle(),
+      supabase.from("site_settings").select("announcement,hero_heading,hero_lead,slogan,mission_statement,mission_author_name,mission_author_title,about_heading,about_copy,fall_details,spring_details,keep_going_heading,keep_going_copy,donate_heading,donate_copy,contact_heading,contact_copy,home_section_order").eq("id", 1).maybeSingle(),
       supabase.from("schedule_items").select("id,day_label,time_label,title,details,sort_order").order("sort_order").order("id"),
     ]).then(([settingsResult, scheduleResult]) => {
       const s = settingsResult.data;
@@ -26,6 +26,9 @@ export default function HomeManagedPanel() {
         const heroLead = document.querySelector("#hero .lead");
         const slogan = document.querySelector("#hero [data-managed-slogan]");
         const mission = document.querySelector("#mission [data-managed-mission]");
+        const missionAuthorName = document.querySelector("#mission [data-managed-mission-author-name]");
+        const missionAuthorTitle = document.querySelector("#mission [data-managed-mission-author-title]");
+        const missionAttribution = document.querySelector("#mission [data-managed-mission-attribution]") as HTMLElement | null;
         const aboutHeading = document.querySelector("#about h2");
         const aboutCopy = document.querySelector("#about [data-managed-about-copy]");
         const seasonCopy = document.querySelectorAll("#about .cards .card p");
@@ -40,6 +43,13 @@ export default function HomeManagedPanel() {
         if (heroLead && s.hero_lead) heroLead.textContent = s.hero_lead;
         if (slogan && s.slogan !== null) slogan.textContent = s.slogan;
         if (mission && s.mission_statement !== null) mission.textContent = s.mission_statement;
+        if (missionAuthorName && s.mission_author_name !== null) missionAuthorName.textContent = s.mission_author_name;
+        if (missionAuthorTitle && s.mission_author_title !== null) missionAuthorTitle.textContent = s.mission_author_title;
+        if (missionAttribution) {
+          const name = typeof s.mission_author_name === "string" ? s.mission_author_name.trim() : "";
+          const title = typeof s.mission_author_title === "string" ? s.mission_author_title.trim() : "";
+          missionAttribution.hidden = !name && !title;
+        }
         if (aboutHeading && s.about_heading) aboutHeading.textContent = s.about_heading;
         if (aboutCopy && s.about_copy) {
           aboutCopy.innerHTML = "";

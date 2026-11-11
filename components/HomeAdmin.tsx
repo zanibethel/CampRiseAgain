@@ -13,6 +13,8 @@ type Settings = {
   hero_lead: string;
   slogan: string;
   mission_statement: string;
+  mission_author_name: string;
+  mission_author_title: string;
   about_heading: string;
   about_copy: string;
   fall_details: string;
@@ -60,6 +62,8 @@ const defaults: Settings = {
   hero_lead: CAMP_HERO_LEAD,
   slogan: CAMP_SLOGAN,
   mission_statement: CAMP_MISSION_STATEMENT,
+  mission_author_name: "Tierra Schofield",
+  mission_author_title: "Founder, Camp Rise Again",
   about_heading: "A safe, supportive place to reconnect with life and with others.",
   about_copy: CAMP_ABOUT_COPY,
   fall_details: "November 6, 2026 · Austin, Texas. Camp Rise Again's peer-support fall gathering will feature planned activities including skydiving, horseback riding, paddleboarding, fishing, relay races, games, and glow-in-the-dark capture the flag. Exact venue and arrival details will be shared privately with confirmed participants. Activities are subject to weather and safety considerations.",
@@ -271,7 +275,22 @@ export default function HomeAdmin() {
 
                   {id === "about" && <><div className="field"><label>About heading</label><input value={settings.about_heading} onChange={(e) => setSettings({ ...settings, about_heading: e.target.value })} /></div><div className="field"><label>About copy</label><textarea style={{ minHeight: 180 }} value={settings.about_copy} onChange={(e) => setSettings({ ...settings, about_copy: e.target.value })} /></div><div className="field"><label>Fall season details</label><textarea value={settings.fall_details} onChange={(e) => setSettings({ ...settings, fall_details: e.target.value })} /></div><div className="field"><label>Spring season details</label><textarea value={settings.spring_details} onChange={(e) => setSettings({ ...settings, spring_details: e.target.value })} /></div></>}
 
-                  {id === "mission" && <div className="field"><label>Mission statement</label><textarea style={{ minHeight: 200 }} value={settings.mission_statement} onChange={(e) => setSettings({ ...settings, mission_statement: e.target.value })} /><small>Shown under Our Mission on the homepage.</small></div>}
+                  {id === "mission" && <>
+                    <div className="field">
+                      <label>Mission statement</label>
+                      <textarea style={{ minHeight: 200 }} value={settings.mission_statement} onChange={(e) => setSettings({ ...settings, mission_statement: e.target.value })} />
+                      <small>Shown under Our Mission on the homepage.</small>
+                    </div>
+                    <div className="field">
+                      <label>Attributed to (name)</label>
+                      <input value={settings.mission_author_name} onChange={(e) => setSettings({ ...settings, mission_author_name: e.target.value })} placeholder="e.g. Tierra Schofield" />
+                    </div>
+                    <div className="field">
+                      <label>Role or title</label>
+                      <input value={settings.mission_author_title} onChange={(e) => setSettings({ ...settings, mission_author_title: e.target.value })} placeholder="e.g. Founder, Camp Rise Again" />
+                      <small>The attribution appears as a signature below the mission. Leave both fields blank to hide it.</small>
+                    </div>
+                  </>}
 
                   {id === "legacy" && <>
                     <p className="section-copy">Edit Michael's dedication on the homepage and his full memorial page. Review Michael's military decorations for accuracy before publishing any future changes.</p>
