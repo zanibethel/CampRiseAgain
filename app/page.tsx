@@ -4,6 +4,7 @@ import DonateButton from "@/components/DonateButton";
 import TeamSection from "@/components/TeamSection";
 import ManagedLogo from "@/components/ManagedLogo";
 import MemorialSection from "@/components/MemorialSection";
+import { CAMP_SLOGAN, CAMP_MISSION_STATEMENT, CAMP_HERO_LEAD, CAMP_ABOUT_COPY, CAMP_DONATE_COPY } from "@/lib/camp-mission";
 
 export default function Home() {
   return (
@@ -15,8 +16,9 @@ export default function Home() {
             <div>
               <div className="eyebrow">Camp Rise Again</div>
               <h1>You don’t have to walk through the darkness alone.</h1>
+              <p className="hero-slogan" data-managed-slogan>{CAMP_SLOGAN}</p>
               <p className="lead">
-                Camp Rise Again is an adult camp created for individuals who are currently struggling with depression and may be feeling isolated, overwhelmed, hopeless, or disconnected from life.
+                {CAMP_HERO_LEAD}
               </p>
               <div className="actions">
                 <Link className="btn btn-primary" href="/apply">Apply to Attend</Link>
@@ -33,11 +35,7 @@ export default function Home() {
           <div className="eyebrow">About the camp</div>
           <h2>A safe, supportive place to reconnect with life and with others.</h2>
           <div className="section-copy" data-managed-about-copy>
-            <p>Our goal is to provide a safe, supportive environment where participants can step away from the weight of everyday life, connect with people who understand, and experience moments of joy, laughter, connection, and hope.</p>
-            <p>Through outdoor activities, recreation, group conversations, wellness experiences, and supportive community, Camp Rise Again creates space for people to breathe, be seen, and remember that their lives have value.</p>
-            <p>This isn’t about pretending everything is okay. It’s about creating a space where you don’t have to pretend.</p>
-            <p>Camp Rise Again is a community of people choosing to take another step forward—together.</p>
-            <p>Camp Rise Again is a peer-support experience built around connection, encouragement, and shared activities. It is not a clinical mental-health treatment program and does not replace professional counseling, medical care, or crisis services.</p>
+            {CAMP_ABOUT_COPY.split("\n\n").map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
           </div>
 
           <div className="cards">
@@ -45,6 +43,12 @@ export default function Home() {
             <div className="card"><h3>Spring Season</h3><p>Spring camp details, dates, location, and capacity will be added here.</p></div>
             <div className="card"><h3>Volunteer With Us</h3><p>Support food service, activities, transportation, camp mentoring, setup, and more.</p></div>
           </div>
+        </section>
+
+        <section id="mission" data-home-section="mission" className="section">
+          <div className="eyebrow">Our mission</div>
+          <h2>Why we rise again.</h2>
+          <p className="section-copy" data-managed-mission>{CAMP_MISSION_STATEMENT}</p>
         </section>
 
         <MemorialSection variant="home" />
@@ -70,7 +74,7 @@ export default function Home() {
         <section id="donate" data-home-section="donate" className="section">
           <div className="eyebrow">Support the mission</div>
           <h2>Help make Camp Rise Again possible.</h2>
-          <p className="section-copy">Every contribution helps us continue building a welcoming, supportive camp experience for adults who are struggling with depression. Visit our GoFundMe to donate and see the latest fundraising progress.</p>
+          <p className="section-copy">{CAMP_DONATE_COPY}</p>
           <div className="actions"><DonateButton /></div>
         </section>
 
