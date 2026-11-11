@@ -23,6 +23,7 @@ export default function Home() {
               <div className="actions">
                 <Link className="btn btn-primary" href="/apply">Apply to Attend</Link>
                 <Link className="btn btn-secondary" href="/volunteer">Become a Volunteer</Link>
+                <DonateButton label="Donate" className="btn btn-donate" />
               </div>
             </div>
             <div className="logo-card">
