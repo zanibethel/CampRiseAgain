@@ -35,6 +35,20 @@ h1 { font-size: clamp(42px, 7vw, 78px); line-height: .98; margin: 14px 0 20px; c
   max-width: 650px;
 }
 #mission .section-copy { font-size: 18px; line-height: 1.8; }
+.mission-attribution {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 26px;
+  padding: 5px 0 5px 18px;
+  border-left: 3px solid var(--sun);
+}
+.mission-attribution[hidden] { display: none; }
+.mission-attribution-name { font-size: 18px; font-weight: 800; color: var(--forest); overflow-wrap: anywhere; }
+.mission-attribution-name:not(:empty)::before { content: "— "; }
+.mission-attribution-title { font-size: 15px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
 
 .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
 .logo-card { padding: 20px; border-radius: 36px; background: white; box-shadow: 0 24px 60px rgba(8,47,36,.15); display: flex; align-items: center; justify-content: center; }
