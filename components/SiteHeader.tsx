@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import HomeManagedPanel from "@/components/HomeManagedPanel";
 import ManagedLogo from "@/components/ManagedLogo";
+import DonateButton from "@/components/DonateButton";
 
 const mobileLinks = [
   { href: "/", label: "Home" },
@@ -98,6 +99,11 @@ export default function SiteHeader() {
                   {label}
                 </a>
               ))}
+              <DonateButton
+                label="Donate"
+                className="mobile-menu-link mobile-menu-donate"
+                onClick={() => setMenuOpen(false)}
+              />
             </nav>
           </div>
         </div>
