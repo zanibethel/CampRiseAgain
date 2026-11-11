@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
-const DEFAULT_URL = "https://gofund.me/4e650f52a";
+const DEFAULT_URL = "https://gofund.me/80cd44483";
 
 export default function GoFundMeAdmin() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
