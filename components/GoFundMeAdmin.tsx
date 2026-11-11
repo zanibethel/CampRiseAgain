@@ -44,7 +44,7 @@ export default function GoFundMeAdmin() {
   return (
     <form className="form-card" onSubmit={save} style={{ marginTop: 24 }}>
       <h2>GoFundMe</h2>
-      <p className="section-copy">Update the donation link used by the Donate on GoFundMe button on the homepage.</p>
+      <p className="section-copy">This URL controls every Donate button: the homepage top buttons, the hamburger menu, and the donation section.</p>
       <div className="field">
         <label htmlFor="gofundmeUrl">GoFundMe URL</label>
         <input
