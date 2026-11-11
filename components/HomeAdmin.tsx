@@ -4,12 +4,15 @@ import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { defaultMemorial, type MemorialContent } from "@/lib/memorial";
 import MemorialGalleryAdmin from "@/components/MemorialGalleryAdmin";
+import { CAMP_SLOGAN, CAMP_MISSION_STATEMENT, CAMP_HERO_LEAD, CAMP_ABOUT_COPY, CAMP_DONATE_COPY } from "@/lib/camp-mission";
 
 type Settings = {
   id: number;
   announcement: string;
   hero_heading: string;
   hero_lead: string;
+  slogan: string;
+  mission_statement: string;
   about_heading: string;
   about_copy: string;
   fall_details: string;
@@ -35,23 +38,36 @@ type ScheduleItem = {
   sort_order: number;
 };
 
-type SectionId = "announcement" | "hero" | "about" | "legacy" | "schedule" | "team" | "keep-going" | "donate" | "contact";
+type SectionId = "announcement" | "hero" | "about" | "mission" | "legacy" | "schedule" | "team" | "keep-going" | "donate" | "contact";
 
-const defaultOrder: SectionId[] = ["announcement", "hero", "about", "legacy", "schedule", "team", "keep-going", "donate", "contact"];
+const defaultOrder: SectionId[] = ["announcement", "hero", "about", "mission", "legacy", "schedule", "team", "keep-going", "donate", "contact"];
+
+function normalizeSectionOrder(stored: SectionId[]): SectionId[] {
+  const result = [...stored, ...defaultOrder.filter((id) => !stored.includes(id))];
+  if (!stored.includes("mission")) {
+    const currentIndex = result.indexOf("mission");
+    if (currentIndex >= 0) result.splice(currentIndex, 1);
+    const aboutIndex = result.indexOf("about");
+    result.splice(aboutIndex < 0 ? 0 : aboutIndex + 1, 0, "mission");
+  }
+  return result;
+}
 
 const defaults: Settings = {
   id: 1,
   announcement: "",
-  hero_heading: "Honor the Lost. Protect the Living.",
-  hero_lead: "Camp Rise Again is a men's mental health camp built around connection, encouragement, and hope. You don't have to walk through the darkness alone.",
-  about_heading: "Our Mission",
-  about_copy: "At Camp Rise Again, our mission is simple: honor the lost and protect the living. We bring men into the wild to break the isolation, confront men's mental health head-on, and build a powerful community where staying in the fight is the only option.\n\nThrough outdoor activities, shared experiences, and honest conversations, we create space for men to feel seen, supported, and connected.\n\nCamp Rise Again is a peer-support experience, not a clinical mental-health treatment program. It does not replace professional counseling, medical care, or crisis services.",
+  hero_heading: "You don’t have to walk through the darkness alone.",
+  hero_lead: CAMP_HERO_LEAD,
+  slogan: CAMP_SLOGAN,
+  mission_statement: CAMP_MISSION_STATEMENT,
+  about_heading: "A safe, supportive place to reconnect with life and with others.",
+  about_copy: CAMP_ABOUT_COPY,
   fall_details: "November 6, 2026 · Austin, Texas. Camp Rise Again's peer-support fall gathering will feature planned activities including skydiving, horseback riding, paddleboarding, fishing, relay races, games, and glow-in-the-dark capture the flag. Exact venue and arrival details will be shared privately with confirmed participants. Activities are subject to weather and safety considerations.",
   spring_details: "Spring camp details, dates, location, and capacity will be added here.",
   keep_going_heading: "Your story isn’t over.",
   keep_going_copy: "There is still hope.\nYou can rise again.",
   donate_heading: "Help make Camp Rise Again possible.",
-  donate_copy: "Every contribution helps us create a supportive camp experience focused on men's mental health, connection, and hope. Visit our GoFundMe to donate and see the latest fundraising progress.",
+  donate_copy: CAMP_DONATE_COPY,
   gofundme_url: "https://gofund.me/4e650f52a",
   contact_heading: "Questions before you apply?",
   contact_copy: "Send us a message and your email app will open with your answers already included so you can review and send it directly.",
@@ -64,6 +80,7 @@ const labels: Record<SectionId, { title: string; subtitle: string }> = {
   announcement: { title: "Announcement", subtitle: "Optional notice shown near the top of the homepage" },
   hero: { title: "Hero & Logo", subtitle: "Main headline, introduction, and Camp Rise Again logo" },
   about: { title: "About the Camp", subtitle: "About copy and fall/spring season details" },
+  mission: { title: "Our Mission", subtitle: "Official men’s mental health mission statement" },
   legacy: { title: "Michael’s Legacy", subtitle: "Homepage dedication, memorial story, honors and portrait" },
   schedule: { title: "Camp Schedule", subtitle: "Activities shown in the public schedule section" },
   team: { title: "Meet the Staff", subtitle: "Controls where the staff section appears on the homepage" },
@@ -91,7 +108,7 @@ export default function HomeAdmin() {
     if (settingsData) {
       const raw = settingsData as Partial<Settings>;
       const order = Array.isArray(raw.home_section_order) ? raw.home_section_order.filter((x): x is SectionId => defaultOrder.includes(x as SectionId)) : [];
-      setSettings({ ...defaults, ...raw, memorial_content: { ...defaultMemorial, ...(raw.memorial_content || {}) }, home_section_order: [...order, ...defaultOrder.filter((x) => !order.includes(x))] });
+      setSettings({ ...defaults, ...raw, memorial_content: { ...defaultMemorial, ...(raw.memorial_content || {}) }, home_section_order: normalizeSectionOrder(order) });
     }
     if (scheduleData) setSchedule(scheduleData as ScheduleItem[]);
   }
@@ -250,9 +267,11 @@ export default function HomeAdmin() {
 
                   {id === "announcement" && <div className="field"><label>Announcement</label><textarea value={settings.announcement} onChange={(e) => setSettings({ ...settings, announcement: e.target.value })} placeholder="Leave blank to hide this section." /></div>}
 
-                  {id === "hero" && <><div className="field"><label>Main headline</label><input value={settings.hero_heading} onChange={(e) => setSettings({ ...settings, hero_heading: e.target.value })} /></div><div className="field"><label>Introduction</label><textarea value={settings.hero_lead} onChange={(e) => setSettings({ ...settings, hero_lead: e.target.value })} /></div><div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", marginBottom: 18 }}><img src={logoUrl()} alt="Current Camp Rise Again logo" style={{ width: 120, height: 120, objectFit: "contain", borderRadius: 14, background: "white" }} /><div><div className="field"><label>Replace logo</label><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={uploadLogo} disabled={uploadingLogo} /></div><div className="actions"><button className="btn btn-secondary" type="button" onClick={resetLogo} disabled={!settings.logo_path || uploadingLogo}>Use Original Logo</button></div></div></div></>}
+                  {id === "hero" && <><div className="field"><label>Main headline</label><input value={settings.hero_heading} onChange={(e) => setSettings({ ...settings, hero_heading: e.target.value })} /></div><div className="field"><label>Introduction</label><textarea value={settings.hero_lead} onChange={(e) => setSettings({ ...settings, hero_lead: e.target.value })} /></div><div className="field"><label>Official slogan</label><input value={settings.slogan} onChange={(e) => setSettings({ ...settings, slogan: e.target.value })} /></div><div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", marginBottom: 18 }}><img src={logoUrl()} alt="Current Camp Rise Again logo" style={{ width: 120, height: 120, objectFit: "contain", borderRadius: 14, background: "white" }} /><div><div className="field"><label>Replace logo</label><input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" onChange={uploadLogo} disabled={uploadingLogo} /></div><div className="actions"><button className="btn btn-secondary" type="button" onClick={resetLogo} disabled={!settings.logo_path || uploadingLogo}>Use Original Logo</button></div></div></div></>}
 
                   {id === "about" && <><div className="field"><label>About heading</label><input value={settings.about_heading} onChange={(e) => setSettings({ ...settings, about_heading: e.target.value })} /></div><div className="field"><label>About copy</label><textarea style={{ minHeight: 180 }} value={settings.about_copy} onChange={(e) => setSettings({ ...settings, about_copy: e.target.value })} /></div><div className="field"><label>Fall season details</label><textarea value={settings.fall_details} onChange={(e) => setSettings({ ...settings, fall_details: e.target.value })} /></div><div className="field"><label>Spring season details</label><textarea value={settings.spring_details} onChange={(e) => setSettings({ ...settings, spring_details: e.target.value })} /></div></>}
+
+                  {id === "mission" && <div className="field"><label>Mission statement</label><textarea style={{ minHeight: 200 }} value={settings.mission_statement} onChange={(e) => setSettings({ ...settings, mission_statement: e.target.value })} /><small>Shown under Our Mission on the homepage.</small></div>}
 
                   {id === "legacy" && <>
                     <p className="section-copy">Edit Michael's dedication on the homepage and his full memorial page. Review Michael's military decorations for accuracy before publishing any future changes.</p>
