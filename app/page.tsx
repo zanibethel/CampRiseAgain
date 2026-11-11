@@ -14,9 +14,9 @@ export default function Home() {
           <div className="hero-inner">
             <div>
               <div className="eyebrow">Camp Rise Again</div>
-              <h1>You don’t have to walk through the darkness alone.</h1>
+              <h1>Honor the Lost. Protect the Living.</h1>
               <p className="lead">
-                Camp Rise Again is an adult camp created for individuals who are currently struggling with depression and may be feeling isolated, overwhelmed, hopeless, or disconnected from life.
+                Camp Rise Again is a men&apos;s mental health camp built around connection, encouragement, and hope. You don&apos;t have to walk through the darkness alone.
               </p>
               <div className="actions">
                 <Link className="btn btn-primary" href="/apply">Apply to Attend</Link>
@@ -31,13 +31,11 @@ export default function Home() {
 
         <section id="about" data-home-section="about" className="section">
           <div className="eyebrow">About the camp</div>
-          <h2>A safe, supportive place to reconnect with life and with others.</h2>
+          <h2>Our Mission</h2>
           <div className="section-copy" data-managed-about-copy>
-            <p>Our goal is to provide a safe, supportive environment where participants can step away from the weight of everyday life, connect with people who understand, and experience moments of joy, laughter, connection, and hope.</p>
-            <p>Through outdoor activities, recreation, group conversations, wellness experiences, and supportive community, Camp Rise Again creates space for people to breathe, be seen, and remember that their lives have value.</p>
-            <p>This isn’t about pretending everything is okay. It’s about creating a space where you don’t have to pretend.</p>
-            <p>Camp Rise Again is a community of people choosing to take another step forward—together.</p>
-            <p>Camp Rise Again is a peer-support experience built around connection, encouragement, and shared activities. It is not a clinical mental-health treatment program and does not replace professional counseling, medical care, or crisis services.</p>
+            <p>At Camp Rise Again, our mission is simple: honor the lost and protect the living. We bring men into the wild to break the isolation, confront men&apos;s mental health head-on, and build a powerful community where staying in the fight is the only option.</p>
+            <p>Through outdoor activities, shared experiences, and honest conversations, we create space for men to feel seen, supported, and connected.</p>
+            <p>Camp Rise Again is a peer-support experience, not a clinical mental-health treatment program. It does not replace professional counseling, medical care, or crisis services.</p>
           </div>
 
           <div className="cards">
@@ -70,7 +68,7 @@ export default function Home() {
         <section id="donate" data-home-section="donate" className="section">
           <div className="eyebrow">Support the mission</div>
           <h2>Help make Camp Rise Again possible.</h2>
-          <p className="section-copy">Every contribution helps us continue building a welcoming, supportive camp experience for adults who are struggling with depression. Visit our GoFundMe to donate and see the latest fundraising progress.</p>
+          <p className="section-copy">Every contribution helps us create a supportive camp experience focused on men&apos;s mental health, connection, and hope. Visit our GoFundMe to donate and see the latest fundraising progress.</p>
           <div className="actions"><DonateButton /></div>
         </section>
 
