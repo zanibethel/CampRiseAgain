@@ -51,6 +51,8 @@ h1 { font-size: clamp(42px, 7vw, 78px); line-height: .98; margin: 14px 0 20px; c
 .mission-attribution-title { font-size: 15px; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
 
 .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
+.btn-donate { background: white; color: var(--forest); border: 2px solid var(--forest); padding: 10px 18px; }
+.btn-donate:hover, .btn-donate:focus-visible { background: #edf5ef; }
 .logo-card { padding: 20px; border-radius: 36px; background: white; box-shadow: 0 24px 60px rgba(8,47,36,.15); display: flex; align-items: center; justify-content: center; }
 .logo-card img { width: min(100%, 420px); height: auto; display: block; border-radius: 24px; object-fit: contain; filter: contrast(1.03) saturate(1.03); }
 .section { max-width: 1120px; margin: auto; padding: 72px 20px; }
@@ -643,6 +645,9 @@ header { z-index: 30; }
   header .mobile-menu-apply:hover,
   header .mobile-menu-apply:focus-visible { background: var(--forest-2); }
   header .mobile-menu-volunteer { background: var(--sun); }
+  header .mobile-menu-donate { background: #edf5ef; border: 1px solid #b9d4c6; }
+  header .mobile-menu-donate:hover,
+  header .mobile-menu-donate:focus-visible { background: #dcefe4; }
   header .mobile-menu-toggle:focus-visible,
   header .mobile-menu-link:focus-visible,
   header .brand:focus-visible {
