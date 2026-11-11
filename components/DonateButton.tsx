@@ -5,7 +5,17 @@ import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const DEFAULT_URL = "https://gofund.me/80cd44483";
 
-export default function DonateButton() {
+type DonateButtonProps = {
+  label?: string;
+  className?: string;
+  onClick?: () => void;
+};
+
+export default function DonateButton({
+  label = "Donate on GoFundMe",
+  className = "btn btn-primary",
+  onClick,
+}: DonateButtonProps) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [url, setUrl] = useState(DEFAULT_URL);
 
@@ -22,8 +32,8 @@ export default function DonateButton() {
   }, [supabase]);
 
   return (
-    <a className="btn btn-primary" href={url} target="_blank" rel="noopener noreferrer">
-      Donate on GoFundMe
+    <a className={className} href={url} target="_blank" rel="noopener noreferrer" onClick={onClick}>
+      {label}
     </a>
   );
 }
