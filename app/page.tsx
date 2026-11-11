@@ -59,16 +59,6 @@ export default function Home() {
 
         <div data-home-section="team"><TeamSection /></div>
 
-        <section id="past-camps" className="section">
-          <div className="eyebrow">Moments that matter</div>
-          <h2>Memories from past camps</h2>
-          <p className="section-copy">See moments of connection, joy, and community from previous gatherings.
-            Our team shares only approved photos and videos.</p>
-          <div className="actions">
-            <Link className="btn btn-primary" href="/past-camps">Explore Past Camps</Link>
-          </div>
-        </section>
-
         <section id="keep-going" data-home-section="keep-going" className="section">
           <div className="eyebrow">Keep going</div>
           <h2>Your story isn’t over.</h2>
