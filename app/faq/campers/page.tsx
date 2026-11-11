@@ -8,7 +8,7 @@ export default async function CamperFAQ() {
 const faqs = await getPublishedFaqs("campers");
 return <><SiteHeader/><main className="form-wrap">
 <div className="eyebrow">For prospective campers</div><h1>Camper FAQs</h1>
-<p className="section-copy">Find answers before you apply. For a specific question, send a message directly to the Camp Rise Again team.</p>
+<p className="section-copy">Camp Rise Again is a men's mental health peer-support camp for adult men. Find answers before you apply, or send a question directly to our team.</p>
 <FaqList items={faqs}/>
 <div className="actions" style={{marginTop:22}}><Link className="btn btn-primary" href="/apply">Apply to Attend</Link><Link className="btn btn-secondary" href="/contact?topic=Camper%20application">Ask a Question</Link></div>
 <p className="section-copy" style={{marginTop:18}}><Link href="/faq">All FAQs</Link> · <Link href="/resources">Support resources</Link></p>

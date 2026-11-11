@@ -26,6 +26,16 @@ header { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,.95
 .eyebrow { color: var(--forest-2); font-weight: 900; letter-spacing: .08em; text-transform: uppercase; font-size: 13px; }
 h1 { font-size: clamp(42px, 7vw, 78px); line-height: .98; margin: 14px 0 20px; color: var(--forest); }
 .lead { font-size: 20px; line-height: 1.6; color: #324c44; max-width: 680px; }
+.hero-slogan {
+  color: var(--forest-2);
+  font-size: clamp(19px, 2.3vw, 25px);
+  font-weight: 800;
+  line-height: 1.4;
+  margin: -2px 0 18px;
+  max-width: 650px;
+}
+#mission .section-copy { font-size: 18px; line-height: 1.8; }
+
 .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
 .logo-card { padding: 20px; border-radius: 36px; background: white; box-shadow: 0 24px 60px rgba(8,47,36,.15); display: flex; align-items: center; justify-content: center; }
 .logo-card img { width: min(100%, 420px); height: auto; display: block; border-radius: 24px; object-fit: contain; filter: contrast(1.03) saturate(1.03); }

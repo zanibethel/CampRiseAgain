@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
-const defaultOrder = ["announcement", "hero", "about", "legacy", "schedule", "team", "keep-going", "donate", "contact"];
+const defaultOrder = ["announcement", "hero", "about", "mission", "legacy", "schedule", "team", "keep-going", "donate", "contact"];
 
 export default function HomeManagedPanel() {
   const pathname = usePathname();
@@ -14,7 +14,7 @@ export default function HomeManagedPanel() {
     if (pathname !== "/" || !supabase) return;
 
     Promise.all([
-      supabase.from("site_settings").select("announcement,hero_heading,hero_lead,about_heading,about_copy,fall_details,spring_details,keep_going_heading,keep_going_copy,donate_heading,donate_copy,contact_heading,contact_copy,home_section_order").eq("id", 1).maybeSingle(),
+      supabase.from("site_settings").select("announcement,hero_heading,hero_lead,slogan,mission_statement,about_heading,about_copy,fall_details,spring_details,keep_going_heading,keep_going_copy,donate_heading,donate_copy,contact_heading,contact_copy,home_section_order").eq("id", 1).maybeSingle(),
       supabase.from("schedule_items").select("id,day_label,time_label,title,details,sort_order").order("sort_order").order("id"),
     ]).then(([settingsResult, scheduleResult]) => {
       const s = settingsResult.data;
@@ -24,6 +24,8 @@ export default function HomeManagedPanel() {
       if (s) {
         const heroHeading = document.querySelector("#hero h1");
         const heroLead = document.querySelector("#hero .lead");
+        const slogan = document.querySelector("#hero [data-managed-slogan]");
+        const mission = document.querySelector("#mission [data-managed-mission]");
         const aboutHeading = document.querySelector("#about h2");
         const aboutCopy = document.querySelector("#about [data-managed-about-copy]");
         const seasonCopy = document.querySelectorAll("#about .cards .card p");
@@ -36,6 +38,8 @@ export default function HomeManagedPanel() {
 
         if (heroHeading && s.hero_heading) heroHeading.textContent = s.hero_heading;
         if (heroLead && s.hero_lead) heroLead.textContent = s.hero_lead;
+        if (slogan && s.slogan !== null) slogan.textContent = s.slogan;
+        if (mission && s.mission_statement !== null) mission.textContent = s.mission_statement;
         if (aboutHeading && s.about_heading) aboutHeading.textContent = s.about_heading;
         if (aboutCopy && s.about_copy) {
           aboutCopy.innerHTML = "";
@@ -108,6 +112,12 @@ export default function HomeManagedPanel() {
 
       const stored = s && Array.isArray(s.home_section_order) ? s.home_section_order : [];
       const order = [...stored.filter((id: string) => defaultOrder.includes(id)), ...defaultOrder.filter((id) => !stored.includes(id))];
+      if (!stored.includes("mission")) {
+        const currentIndex = order.indexOf("mission");
+        if (currentIndex >= 0) order.splice(currentIndex, 1);
+        const aboutIndex = order.indexOf("about");
+        order.splice(aboutIndex < 0 ? 0 : aboutIndex + 1, 0, "mission");
+      }
       order.forEach((id) => {
         const element = main.querySelector(`[data-home-section="${id}"]`);
         if (element) main.appendChild(element);
