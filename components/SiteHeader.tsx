@@ -5,13 +5,14 @@ import HomeManagedPanel from "@/components/HomeManagedPanel";
 import ManagedLogo from "@/components/ManagedLogo";
 import DonateButton from "@/components/DonateButton";
 
-const mobileLinks = [
-  { href: "/apply", label: "Apply", kind: "apply" },
-  { href: "/volunteer", label: "Volunteer", kind: "volunteer" },
+const mobilePrimaryLinks = [
   { href: "/", label: "Home" },
   { href: "/#about", label: "About the Camp" },
   { href: "/resources", label: "Resources" },
   { href: "/faq", label: "FAQs" },
+];
+
+const mobileSecondaryLinks = [
   { href: "/past-camps", label: "Past Camps" },
   { href: "/michael-garza", label: "Our Story" },
   { href: "/#contact", label: "Contact" },
@@ -97,16 +98,30 @@ export default function SiteHeader() {
               aria-label="Mobile navigation"
               hidden={!menuOpen}
             >
-              <DonateButton
-                label="Donate"
-                className="mobile-menu-link mobile-menu-donate"
-                onClick={() => setMenuOpen(false)}
-              />
-              {mobileLinks.map(({ href, label, kind }) => (
+              {mobilePrimaryLinks.map(({ href, label }) => (
                 <a
                   key={href}
                   href={href}
-                  className={kind ? `mobile-menu-link mobile-menu-${kind}` : "mobile-menu-link"}
+                  className="mobile-menu-link"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {label}
+                </a>
+              ))}
+              <div className="mobile-menu-action-group" role="group" aria-label="Support and participate">
+                <DonateButton
+                  label="Donate"
+                  className="mobile-menu-link mobile-menu-donate"
+                  onClick={() => setMenuOpen(false)}
+                />
+                <a className="mobile-menu-link mobile-menu-apply" href="/apply" onClick={() => setMenuOpen(false)}>Apply</a>
+                <a className="mobile-menu-link mobile-menu-volunteer" href="/volunteer" onClick={() => setMenuOpen(false)}>Volunteer</a>
+              </div>
+              {mobileSecondaryLinks.map(({ href, label }) => (
+                <a
+                  key={href}
+                  href={href}
+                  className="mobile-menu-link"
                   onClick={() => setMenuOpen(false)}
                 >
                   {label}
