@@ -229,14 +229,14 @@ Deno.serve(async (request: Request) => {
       const kind = str(params.kind, 20);
       if (!["camper","volunteer"].includes(kind)) return respond({ error:"Unknown form" },400);
       const { data, error } = await db.from("camp_rise_again_form_fields")
-        .select("field_key,label,input_type,choices,required,sort_order")
+        .select("field_key,label,input_type,choices,required,sort_order,after_field")
         .eq("form_kind",kind).eq("active",true)
         .order("sort_order",{ascending:true}).order("created_at",{ascending:true}).limit(30);
       return error ? respond({error:"Questions unavailable"},503) : respond({fields:data || []});
     }
     if (action === "admin_field_list") {
       const { data, error } = await db.from("camp_rise_again_form_fields")
-        .select("id,form_kind,field_key,label,input_type,choices,required,active,sort_order,updated_at")
+        .select("id,form_kind,field_key,label,input_type,choices,required,active,sort_order,after_field,updated_at")
         .order("form_kind").order("sort_order").order("created_at");
       return error ? respond({error:"Unable to load questions"},503) : respond({fields:data || []});
     }
@@ -260,13 +260,24 @@ Deno.serve(async (request: Request) => {
         choices, required:isRequired, active, sort_order:order, updated_at:new Date().toISOString() };
       if (action === "admin_field_create") {
         const key = str(params.field_key,48);
+        const anchor = str(params.after_field,48);
         if (!/^[a-z][a-z0-9_]{1,47}$/.test(key)) return respond({error:"Question key must be lowercase letters, digits or underscores"},400);
+        const fixed = kind === "camper"
+          ? ["firstName","lastName","email","phone","address1","address2","city","state",
+            "postalCode","dateOfBirth","shirtSize","season","notes"]
+          : ["firstName","lastName","email","phone","season","roles","notes"];
+        if (!anchor || anchor === key) return respond({error:"Choose where the question should appear"},400);
+        if (!fixed.includes(anchor)) {
+          const {data:parent,error:parentError} = await db.from("camp_rise_again_form_fields")
+            .select("id").eq("form_kind",kind).eq("field_key",anchor).maybeSingle();
+          if (parentError || !parent) return respond({error:"Position not found. Refresh the form editor."},409);
+        }
         const {count,error:countError} = await db.from("camp_rise_again_form_fields")
           .select("id",{head:true,count:"exact"}).eq("form_kind",kind);
         if (countError) return respond({error:"Cannot verify question limit"},503);
         if ((count || 0) >= 25) return respond({error:"Maximum 25 questions per form"},400);
         const { data, error } = await db.from("camp_rise_again_form_fields")
-          .insert({...change,field_key:key}).select("*").single();
+          .insert({...change,field_key:key,after_field:anchor}).select("*").single();
         return error ? respond({error:error.code === "23505" ? "Question key already exists" : "Unable to create question"},error.code === "23505" ? 409:503)
           : respond({field:data});
       }
