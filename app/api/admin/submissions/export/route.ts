@@ -1,15 +1,9 @@
 import { campBridge, CampBridgeError } from "@/lib/camp-supabase-bridge";
+import { buildEngagementCsv } from "@/lib/camp-report-csv";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function cell(value: unknown): string {
-  const string = typeof value === "object" && value !== null
-    ? JSON.stringify(value) : String(value ?? "");
-  // A downloaded CSV must not execute spreadsheet formulas from untrusted form data.
-  const safe = /^\s*[=+@-]/.test(string) ? "'" + string : string;
-  return '"' + safe.replace(/"/g,'""') + '"';
-}
 export async function GET(request: Request) {
   const authorization = request.headers.get("authorization") || "";
   if (!authorization.startsWith("Bearer ") || authorization.length > 4096)
@@ -20,20 +14,8 @@ export async function GET(request: Request) {
   try {
     const data = await campBridge<{submissions:Record<string,unknown>[];truncated:boolean}>(
       "admin_export_submissions",{kind},authorization.slice(7));
-    const standard = ["kind","id","created_at","first_name","last_name","name","email",
-      "phone","city","state","season_preference","volunteer_roles","topic"];
-    const extras = [...new Set(data.submissions.flatMap(x=>Object.keys(
-      x.extra_answers && typeof x.extra_answers === "object" && !Array.isArray(x.extra_answers)
-        ? x.extra_answers as Record<string,unknown> : {})))].sort();
-    const keys = [...standard,...extras.map(x=>"answer:"+x)];
-    const lines = [keys.map(cell).join(","),...data.submissions.map(item=>keys.map(key=>{
-      if (key.startsWith("answer:")) {
-        const answers=item.extra_answers as Record<string,unknown> | undefined;
-        return cell(answers?.[key.slice(7)]);
-      }
-      return cell(item[key]);
-    }).join(","))];
-    return new Response("\uFEFF"+lines.join("\r\n"),{
+    const csv=buildEngagementCsv(data.submissions);
+    return new Response(csv,{
       headers:{"Content-Type":"text/csv; charset=utf-8",
         "Content-Disposition":'attachment; filename="camp-rise-again-'+kind+'-submissions.csv"',
         "Cache-Control":"private, no-store",
