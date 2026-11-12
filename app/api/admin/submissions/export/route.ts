@@ -7,7 +7,7 @@ function cell(value: unknown): string {
   const string = typeof value === "object" && value !== null
     ? JSON.stringify(value) : String(value ?? "");
   // A downloaded CSV must not execute spreadsheet formulas from untrusted form data.
-  const safe = /^[\\s]*[=+@-]/.test(string) ? "'" + string : string;
+  const safe = /^\s*[=+@-]/.test(string) ? "'" + string : string;
   return '"' + safe.replace(/"/g,'""') + '"';
 }
 export async function GET(request: Request) {
