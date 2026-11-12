@@ -6,6 +6,8 @@ import ManagedLogo from "@/components/ManagedLogo";
 import DonateButton from "@/components/DonateButton";
 
 const mobileLinks = [
+  { href: "/apply", label: "Apply", kind: "apply" },
+  { href: "/volunteer", label: "Volunteer", kind: "volunteer" },
   { href: "/", label: "Home" },
   { href: "/#about", label: "About the Camp" },
   { href: "/resources", label: "Resources" },
@@ -13,8 +15,6 @@ const mobileLinks = [
   { href: "/past-camps", label: "Past Camps" },
   { href: "/michael-garza", label: "Our Story" },
   { href: "/#contact", label: "Contact" },
-  { href: "/apply", label: "Apply", kind: "apply" },
-  { href: "/volunteer", label: "Volunteer", kind: "volunteer" },
 ];
 
 export default function SiteHeader() {
@@ -25,10 +25,14 @@ export default function SiteHeader() {
   useEffect(() => {
     if (!menuOpen) return;
 
-    function handlePointerDown(event: PointerEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+    function handleOutsideInteraction(event: Event) {
+      if (event.target instanceof Node && menuRef.current && !menuRef.current.contains(event.target)) {
         setMenuOpen(false);
       }
+    }
+    function handlePageScroll() {
+      // Keep the menu usable if its own list scrolls, but close on page scroll.
+      setMenuOpen(false);
     }
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -37,11 +41,15 @@ export default function SiteHeader() {
       }
     }
 
-    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("pointerdown", handleOutsideInteraction, true);
+    document.addEventListener("touchstart", handleOutsideInteraction, true);
     document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("scroll", handlePageScroll, { passive: true });
     return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("pointerdown", handleOutsideInteraction, true);
+      document.removeEventListener("touchstart", handleOutsideInteraction, true);
       document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handlePageScroll);
     };
   }, [menuOpen]);
 
@@ -89,6 +97,11 @@ export default function SiteHeader() {
               aria-label="Mobile navigation"
               hidden={!menuOpen}
             >
+              <DonateButton
+                label="Donate"
+                className="mobile-menu-link mobile-menu-donate"
+                onClick={() => setMenuOpen(false)}
+              />
               {mobileLinks.map(({ href, label, kind }) => (
                 <a
                   key={href}
@@ -99,11 +112,6 @@ export default function SiteHeader() {
                   {label}
                 </a>
               ))}
-              <DonateButton
-                label="Donate"
-                className="mobile-menu-link mobile-menu-donate"
-                onClick={() => setMenuOpen(false)}
-              />
             </nav>
           </div>
         </div>
