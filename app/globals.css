@@ -53,6 +53,26 @@ h1 { font-size: clamp(42px, 7vw, 78px); line-height: .98; margin: 14px 0 20px; c
 .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
 .btn-donate { background: white; color: var(--forest); border: 2px solid var(--forest); padding: 10px 18px; }
 .btn-donate:hover, .btn-donate:focus-visible { background: #edf5ef; }
+.hero-action-label-short { display: none; }
+@media (max-width: 680px) {
+  .hero-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .hero-actions .btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 10px 3px;
+    font-size: clamp(12px, 3.6vw, 14px);
+    line-height: 1.2;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .hero-actions .hero-action-label-full { display: none; }
+  .hero-actions .hero-action-label-short { display: inline; }
+}
 .logo-card { padding: 20px; border-radius: 36px; background: white; box-shadow: 0 24px 60px rgba(8,47,36,.15); display: flex; align-items: center; justify-content: center; }
 .logo-card img { width: min(100%, 420px); height: auto; display: block; border-radius: 24px; object-fit: contain; filter: contrast(1.03) saturate(1.03); }
 .section { max-width: 1120px; margin: auto; padding: 72px 20px; }

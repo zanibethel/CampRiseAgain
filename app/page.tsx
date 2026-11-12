@@ -20,9 +20,15 @@ export default function Home() {
               <p className="lead">
                 {CAMP_HERO_LEAD}
               </p>
-              <div className="actions">
-                <Link className="btn btn-primary" href="/apply">Apply to Attend</Link>
-                <Link className="btn btn-secondary" href="/volunteer">Become a Volunteer</Link>
+              <div className="actions hero-actions">
+                <Link className="btn btn-primary" href="/apply" aria-label="Apply to Attend">
+                  <span className="hero-action-label-full">Apply to Attend</span>
+                  <span className="hero-action-label-short" aria-hidden="true">Attend</span>
+                </Link>
+                <Link className="btn btn-secondary" href="/volunteer" aria-label="Become a Volunteer">
+                  <span className="hero-action-label-full">Become a Volunteer</span>
+                  <span className="hero-action-label-short" aria-hidden="true">Volunteer</span>
+                </Link>
                 <DonateButton label="Donate" className="btn btn-donate" />
               </div>
             </div>
