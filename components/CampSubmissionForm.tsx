@@ -4,6 +4,10 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 type Kind = "camper" | "volunteer" | "contact";
+type ExtraField = {
+  field_key:string; label:string; input_type:"short_text"|"long_text"|"select"|"multi_select"|"checkbox";
+  choices:string[]; required:boolean; sort_order:number;
+};
 const roles = [
   ["food_beverage", "Food & beverage"],
   ["camp_mentor_support", "Camp mentor support"],
@@ -25,6 +29,9 @@ export default function CampSubmissionForm({ kind }: { kind: Kind }) {
   const [success, setSuccess] = useState(false);
   const requestId = useRef<string | null>(null);
   const [contactTopic, setContactTopic] = useState("");
+  const [extraFields,setExtraFields] = useState<ExtraField[]>([]);
+  const [extraReady,setExtraReady] = useState(kind === "contact");
+  const [extraError,setExtraError] = useState("");
   useEffect(() => {
     if (kind !== "contact") return;
     const topic = new URLSearchParams(window.location.search).get("topic") || "";
@@ -33,6 +40,21 @@ export default function CampSubmissionForm({ kind }: { kind: Kind }) {
       setContactTopic(topic);
     }
   }, [kind]);
+
+  useEffect(() => {
+    if (kind === "contact") return;
+    let active = true;
+    fetch("/api/form-fields?kind=" + encodeURIComponent(kind),{cache:"no-store"})
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data.fields)) throw new Error("Unable to load questions.");
+        if (active) { setExtraFields(data.fields); setExtraReady(true); setExtraError(""); }
+      })
+      .catch(() => {
+        if (active) { setExtraError("Additional questions are unavailable. Please try again shortly."); setExtraReady(false); }
+      });
+    return () => { active = false; };
+  },[kind]);
 
   const isContact = kind === "contact";
   const isCamper = kind === "camper";
@@ -51,6 +73,28 @@ export default function CampSubmissionForm({ kind }: { kind: Kind }) {
     if (!requestId.current) requestId.current = crypto.randomUUID();
     const body: Record<string,unknown> = Object.fromEntries(fd.entries());
     if (kind === "volunteer") body.roles = fd.getAll("roles").map(String);
+    if (kind !== "contact") {
+      if (!extraReady) {
+        setStatus("Additional questions are still loading. Please try again.");
+        return;
+      }
+      const extraAnswers: Record<string,string|string[]|boolean> = {};
+      for (const field of extraFields) {
+        const name = "extra." + field.field_key;
+        if (field.input_type === "multi_select") extraAnswers[field.field_key] = fd.getAll(name).map(String);
+        else if (field.input_type === "checkbox") extraAnswers[field.field_key] = fd.get(name) === "yes";
+        else extraAnswers[field.field_key] = String(fd.get(name) ?? "");
+        if (field.required && (extraAnswers[field.field_key] === "" ||
+            (Array.isArray(extraAnswers[field.field_key]) && (extraAnswers[field.field_key] as string[]).length === 0) ||
+            extraAnswers[field.field_key] === false)) {
+          setStatus("Please answer: " + field.label);
+          setSuccess(false);
+          return;
+        }
+        delete body[name];
+      }
+      body.extraAnswers = extraAnswers;
+    }
     body.consent = fd.get("consent") === "yes";
     body.requestId = requestId.current;
     setWorking(true);
@@ -150,6 +194,38 @@ export default function CampSubmissionForm({ kind }: { kind: Kind }) {
               {roles.map(([value,label])=><label key={value}><input type="checkbox" name="roles" value={value}/>{label}</label>)}
             </div></fieldset>
           )}
+          {extraError && <p className="status" role="alert">{extraError}</p>}
+          {!isContact && extraFields.length > 0 && (
+            <fieldset>
+              <legend>Additional questions</legend>
+              <p className="section-copy">These details help us plan and follow up. Required questions are marked.</p>
+              {extraFields.map(field => {
+                const name = "extra." + field.field_key;
+                const id = "extra-" + field.field_key;
+                if (field.input_type === "checkbox") return <label key={name} className="checks"
+                  style={{display:"flex",alignItems:"center",gap:10,margin:"12px 0"}}>
+                  <input type="checkbox" name={name} value="yes" required={field.required}/>
+                  {field.label}{field.required ? " *" : ""}
+                </label>;
+                if (field.input_type === "multi_select") return <fieldset key={name}
+                  style={{margin:"12px 0"}}><legend>{field.label}{field.required ? " *" : ""}</legend>
+                  <div className="checks">{field.choices.map(choice=><label key={choice}>
+                    <input type="checkbox" name={name} value={choice}/>{choice}
+                  </label>)}</div>
+                </fieldset>;
+                return <div className="field" key={name}>
+                  <label htmlFor={id}>{field.label}{field.required ? " *" : ""}</label>
+                  {field.input_type === "select" ?
+                    <select id={id} name={name} defaultValue="" required={field.required}>
+                      <option value="">{field.required ? "Choose an option" : "No preference / Skip"}</option>
+                      {field.choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}
+                    </select> : field.input_type === "long_text" ?
+                    <textarea id={id} name={name} rows={3} maxLength={1000} required={field.required}/> :
+                    <input id={id} name={name} maxLength={200} required={field.required}/>}
+                </div>;
+              })}
+            </fieldset>
+          )}
           <div className="field"><label htmlFor="notes">{isCamper ? "Anything else we should know? (optional)" : "Experience, availability, or notes (optional)"}</label><textarea id="notes" name="notes" maxLength={2000} rows={4}/></div>
         </>
       )}
@@ -164,7 +240,7 @@ export default function CampSubmissionForm({ kind }: { kind: Kind }) {
         Submissions are saved in a restricted system. Staff receive a notification without your full form answers.
         This site is not monitored for emergencies: call 911 if you are in immediate danger or call/text 988 in the U.S. for crisis support.
       </div>
-      <button className="btn btn-primary" type="submit" disabled={working}>
+      <button className="btn btn-primary" type="submit" disabled={working || !extraReady}>
         {working ? "Submitting…" : isContact ? "Send Message" : "Submit " + config.label}
       </button>
       {status && <p className="status" role="status" aria-live="polite" style={success ? {fontWeight:600}:undefined}>{status}</p>}
