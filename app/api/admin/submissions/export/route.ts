@@ -21,8 +21,7 @@ export async function GET(request: Request) {
     const data = await campBridge<{submissions:Record<string,unknown>[];truncated:boolean}>(
       "admin_export_submissions",{kind},authorization.slice(7));
     const standard = ["kind","id","created_at","first_name","last_name","name","email",
-      "phone","city","state","season_preference","volunteer_roles","topic",
-      "address_1","address_2","postal_code","date_of_birth","shirt_size","notes","message"];
+      "phone","city","state","season_preference","volunteer_roles","topic"];
     const extras = [...new Set(data.submissions.flatMap(x=>Object.keys(
       x.extra_answers && typeof x.extra_answers === "object" && !Array.isArray(x.extra_answers)
         ? x.extra_answers as Record<string,unknown> : {})))].sort();
