@@ -7,7 +7,7 @@ Date: 2026-11-12
 - The question's immutable field key is used in historical reporting. Hiding a question does not erase old answers.
 - Added starter optional questions for discovery source, preferred contact method, first camp, volunteer availability and experience. Review all wording with the camp team before making questions required.
 - Each application saves validated answers to the existing restricted Supabase table's extra_answers JSONB column.
-- The admin engagement summary shows exact total and last-30-day counts of camper, volunteer and contact submissions, plus volunteer interest breakdown.
+- The admin engagement summary shows exact total and last-30-day counts of camper, volunteer and contact submissions, plus volunteer interest and discovery-source breakdowns.
 - Admin engagement CSV export includes contact and engagement details plus configured answers, but deliberately excludes street addresses, birthdays, open-text notes and messages. Up to 1,000 records per type; larger exports are flagged as incomplete. Keep downloaded CSVs private.
 
 ## Security and privacy
