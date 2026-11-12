@@ -12,6 +12,12 @@ type AdminMedia=CampMedia & {
 };
 type AlbumDraft = { title:string; camp_date:string; location:string; description:string; is_published:boolean };
 type MediaDraft = {caption:string;alt_text:string;consent_confirmed:boolean;is_published:boolean};
+type UploadStage = "queued"|"preparing"|"uploading"|"saving"|"complete"|"failed";
+type UploadQueueItem = {
+  id:string; file:File; stage:UploadStage; error:string; finalizeId?:string;
+};
+const MAX_UPLOAD_SELECTION = 100;
+const UPLOAD_WORKERS = 2;
 
 function albumDraft(item:AdminAlbum):AlbumDraft {
   return {title:item.title,camp_date:item.camp_date||"",location:item.location,
@@ -76,7 +82,7 @@ export default function PastCampsAdmin() {
   const [newAlbum,setNewAlbum]=useState({title:"",camp_date:"",location:"",description:""});
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState(false);
-  const [progress,setProgress]=useState("");
+  const [uploadQueue,setUploadQueue]=useState<UploadQueueItem[]>([]);
   const [status,setStatus]=useState("");
 
   const api=useCallback(async(action?:string,params:Record<string,unknown>={})=>{
@@ -142,39 +148,89 @@ export default function PastCampsAdmin() {
   const albumFiles=media.filter(x=>x.album_id===selectedId)
     .sort((a,b)=>a.sort_order-b.sort_order);
 
+  async function uploadBatch(items:UploadQueueItem[]) {
+    if(!selected || !supabase || !items.length || busy)return;
+    const albumId=selected.id;
+    setBusy(true);setStatus("");
+    let nextIndex=0;
+    let succeeded=0;
+    let failed=0;
+    const mark=(id:string,update:Partial<UploadQueueItem>)=>{
+      setUploadQueue(current=>current.map(item=>item.id===id?{...item,...update}:item));
+    };
+    async function worker() {
+      while(nextIndex<items.length) {
+        const item=items[nextIndex++];
+        try {
+          let finalizeId=item.finalizeId;
+          if(!finalizeId) {
+            mark(item.id,{stage:"preparing",error:""});
+            const prepared=await prepareUpload(item.file);
+            if(!validGalleryUpload(prepared.mime,prepared.file.size))
+              throw new Error("File is outside the supported type or size limits.");
+            mark(item.id,{stage:"uploading"});
+            const ticket=await api("admin_gallery_prepare_upload",{
+              album_id:albumId,mime_type:prepared.mime,bytes:prepared.file.size,
+            });
+            const {error:uploadError}=await supabase.storage.from(ticket.bucket)
+              .uploadToSignedUrl(ticket.path,ticket.uploadToken,prepared.file,{
+                contentType:prepared.mime,upsert:false,
+              });
+            if(uploadError)throw uploadError;
+            // If finalizing fails, retry finalization without uploading another copy.
+            finalizeId=ticket.mediaId as string;
+            item.finalizeId=finalizeId;
+          }
+          mark(item.id,{stage:"saving",finalizeId});
+          await api("admin_gallery_finalize_upload",{id:finalizeId});
+          mark(item.id,{stage:"complete",error:"",finalizeId:undefined});
+          succeeded++;
+        }catch(error) {
+          failed++;
+          mark(item.id,{stage:"failed",error:error instanceof Error?error.message:"Upload failed."});
+        }
+      }
+    }
+    try {
+      await Promise.all(Array.from({length:Math.min(UPLOAD_WORKERS,items.length)},()=>worker()));
+      setStatus(succeeded+" uploaded"+(failed?", "+failed+" failed. Use Retry Failed to try just those files.":". The files are private until approved and published."));
+    }finally {
+      await refresh();
+      setBusy(false);
+    }
+  }
+
   async function upload(event:ChangeEvent<HTMLInputElement>) {
     const files=Array.from(event.target.files||[]);
     event.target.value="";
     if(!selected || !supabase || !files.length || busy)return;
-    if(files.length>10){setStatus("Choose up to 10 photos or videos per upload.");return;}
-    setBusy(true);setStatus("");
-    let completed=0;
-    try {
-      for(const [index,file] of files.entries()){
-        setProgress("Uploading "+(index+1)+" of "+files.length+": "+file.name);
-        const prepared=await prepareUpload(file);
-        if(!validGalleryUpload(prepared.mime,prepared.file.size))
-          throw new Error("File is outside the supported type or size limits.");
-        const ticket=await api("admin_gallery_prepare_upload",{
-          album_id:selected.id,mime_type:prepared.mime,bytes:prepared.file.size,
-        });
-        const {error:uploadError}=await supabase.storage.from(ticket.bucket)
-          .uploadToSignedUrl(ticket.path,ticket.uploadToken,prepared.file,{
-            contentType:prepared.mime,upsert:false,
-          });
-        if(uploadError)throw uploadError;
-        await api("admin_gallery_finalize_upload",{id:ticket.mediaId});
-        completed++;
-      }
-      setStatus(completed+" file(s) uploaded privately. Add captions and confirm sharing permissions before publishing.");
-    }catch(error){
-      setStatus(completed+" uploaded. "+(error instanceof Error?error.message:"Upload failed.")+
-        " Refresh the album before retrying.");
-    }finally{
-      setBusy(false);setProgress("");
-      await refresh();
+    if(files.length>MAX_UPLOAD_SELECTION) {
+      setStatus("Choose up to "+MAX_UPLOAD_SELECTION+" photos or videos in one selection.");
+      return;
     }
+    const items:UploadQueueItem[]=files.map(file=>({
+      id:crypto.randomUUID(),file,stage:"queued",error:"",
+    }));
+    setUploadQueue(items);
+    await uploadBatch(items);
   }
+
+  async function retryFailed() {
+    if(busy)return;
+    const items=uploadQueue.filter(item=>item.stage==="failed").map(item=>({
+      ...item,stage:"queued" as const,error:"",
+    }));
+    if(!items.length)return;
+    const retryIds=new Set(items.map(item=>item.id));
+    setUploadQueue(current=>current.map(item=>retryIds.has(item.id)?{
+      ...item,stage:"queued",error:"",
+    }:item));
+    await uploadBatch(items);
+  }
+
+  const uploadedCount=uploadQueue.filter(item=>item.stage==="complete").length;
+  const failedCount=uploadQueue.filter(item=>item.stage==="failed").length;
+  const processedCount=uploadedCount+failedCount;
 
   return <section className="form-card" aria-label="Past Camps album administration">
     <h2>Past Camps — Photos & Videos</h2>
@@ -221,7 +277,7 @@ export default function PastCampsAdmin() {
       {albums.map(album=><button key={album.id} type="button" className="camp-admin-album-tab"
         style={{borderColor: selectedId===album.id?"var(--forest)":"var(--line)"}}
         aria-pressed={selectedId===album.id}
-        onClick={()=>setSelectedId(album.id)}>
+        onClick={()=>{setSelectedId(album.id);setUploadQueue([]);}} disabled={busy}>
         <strong>{album.title}</strong>
         <small>{album.is_published?"Public":"Private draft"} · {media.filter(x=>x.album_id===album.id).length} files</small>
       </button>)}
@@ -267,16 +323,40 @@ export default function PastCampsAdmin() {
       </div>
 
       <h3>Photos & Videos</h3>
-      <p className="section-copy">Choose up to 10 files at a time. Photos are optimized automatically;
-        videos must be 45 MB or smaller. MP4 and WebM play most reliably across devices.
-        MOV playback varies by browser.</p>
+      <p className="section-copy">Select up to {MAX_UPLOAD_SELECTION} photos or videos at once, including all 45 photos from a phone.
+        Photos are automatically optimized; videos must be 45 MB or smaller. MP4 and WebM play most reliably.
+        Files upload privately and any failures can be retried individually without repeating successful uploads.</p>
       <div className="field">
         <label htmlFor="camp-media-upload">Upload to {selected.title}</label>
         <input id="camp-media-upload" type="file" multiple disabled={busy}
           accept="image/*,.heic,.heif,video/mp4,video/webm,video/quicktime,.mov"
           onChange={event=>void upload(event)}/>
       </div>
-      {progress && <p role="status" className="status">{progress}</p>}
+      {uploadQueue.length>0 && <div className="notice" style={{marginBottom:20}}>
+        <p role="status" aria-live="polite" style={{margin:"0 0 8px"}}>
+          <strong>{uploadedCount} of {uploadQueue.length} uploaded</strong>
+          {failedCount>0?" · "+failedCount+" failed":""}
+          {busy?" · "+(uploadQueue.length-processedCount)+" remaining":""}
+        </p>
+        <progress value={processedCount} max={uploadQueue.length}
+          aria-label="Photo and video batch upload progress" style={{width:"100%"}}/>
+        {failedCount>0 && !busy && <button type="button" className="btn btn-secondary"
+          style={{marginTop:10}} onClick={()=>void retryFailed()}>Retry Failed ({failedCount})</button>}
+        <details style={{marginTop:12}}>
+          <summary>View status of all {uploadQueue.length} selected files</summary>
+          <ul style={{listStyle:"none",padding:0,margin:"12px 0 0",maxHeight:300,overflowY:"auto"}}>
+            {uploadQueue.map(item=><li key={item.id} style={{padding:"7px 0",borderBottom:"1px solid var(--line)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                <span style={{overflowWrap:"anywhere",minWidth:0}}>{item.file.name}</span>
+                <strong>{item.stage==="complete"?"Uploaded":item.stage==="failed"?"Failed":
+                  item.stage==="preparing"?"Preparing":item.stage==="uploading"?"Uploading":
+                  item.stage==="saving"?"Saving":"Waiting"}</strong>
+              </div>
+              {item.error && <small style={{display:"block",overflowWrap:"anywhere"}}>{item.error}</small>}
+            </li>)}
+          </ul>
+        </details>
+      </div>}
       {!albumFiles.length && <p className="section-copy">No media uploaded yet.</p>}
       <div className="camp-admin-media-list">
         {albumFiles.map((item,index)=>{
