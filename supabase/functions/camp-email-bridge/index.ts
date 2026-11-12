@@ -438,22 +438,29 @@ Deno.serve(async (request: Request) => {
         counts[kind] = {total:all.count || 0,last30Days:recent.count || 0};
       }
       const {data: volunteers,error:roleError} = await db.from("camp_rise_again_volunteer_applications")
-        .select("volunteer_roles,season_preference").order("created_at",{ascending:false}).limit(1000);
+        .select("volunteer_roles,season_preference,extra_answers").order("created_at",{ascending:false}).limit(1000);
       const {data: campers,error:seasonError} = await db.from("camp_rise_again_camper_applications")
-        .select("season_preference").order("created_at",{ascending:false}).limit(1000);
+        .select("season_preference,extra_answers").order("created_at",{ascending:false}).limit(1000);
       if (roleError || seasonError) return respond({error:"Unable to summarize preferences"},503);
       const roleCounts: Record<string,number> = {};
       const seasonCounts: Record<string,number> = {};
+      const sourceCounts: Record<string,number> = {};
+      const trackSource = (row: {extra_answers?:{how_heard?:unknown}}) => {
+        const source = row.extra_answers?.how_heard;
+        if (typeof source === "string" && source.length <= 100) sourceCounts[source] = (sourceCounts[source] || 0)+1;
+      };
       for (const row of volunteers || []) {
+        trackSource(row);
         for (const role of row.volunteer_roles || []) roleCounts[role] = (roleCounts[role] || 0)+1;
         const key = "volunteer:" + row.season_preference;
         seasonCounts[key] = (seasonCounts[key] || 0)+1;
       }
       for (const row of campers || []) {
+        trackSource(row);
         const key = "camper:" + row.season_preference;
         seasonCounts[key] = (seasonCounts[key] || 0)+1;
       }
-      return respond({counts,roleCounts,seasonCounts,
+      return respond({counts,roleCounts,seasonCounts,sourceCounts,
         preferencesSampled:(counts.camper as Json).total !== (campers || []).length ||
           (counts.volunteer as Json).total !== (volunteers || []).length});
     }
