@@ -3,8 +3,8 @@ Date: 2026-11-12
 
 ## What changes
 - Attendee (/apply) and volunteer (/volunteer) forms load active extra questions through the server-side Supabase bridge.
-- Admin > Form Submissions can create/edit questions, choose form, answer type (short text, paragraph, dropdown, multiple choices, checkbox), options, required/optional, order and visibility.
-- The question's immutable field key is used in historical reporting. Hiding a question does not erase old answers.
+- Admin > Form Submissions contains a separate Attendee and Volunteer field editor. Every standard and custom field has **+ Add Field Below**, so any authorized admin can add a question in context, with a custom input type (short text, paragraph, dropdown, multiple choices, checkbox), options, required/optional and visibility. Standard fields remain intact to preserve existing intake requirements.
+- A new field's `after_field` anchor places it immediately after the selected standard or custom field in the public form; nested questions preserve their relative order. The question's immutable field key is used in historical reporting. Hiding a question does not erase old answers. Invalid or inactive placement anchors safely fall back to the end.
 - Added starter optional questions for discovery source, preferred contact method, first camp, volunteer availability and experience. Review all wording with the camp team before making questions required.
 - Each application saves validated answers to the existing restricted Supabase table's extra_answers JSONB column.
 - The admin engagement summary shows exact total and last-30-day counts of camper, volunteer and contact submissions, plus volunteer interest and discovery-source breakdowns.
@@ -21,7 +21,7 @@ Date: 2026-11-12
 - CSV exports are private and should not be forwarded or stored in publicly shared drives. Individual sensitive application details remain visible only in the authenticated submission detail view.
 
 ## Deployment order
-1. Review PR and run build/type checks. Verify existing tests and new routes.
+1. Review PR and run build/type checks. Verify existing tests, field-positioning tests, and new routes. Compare the public placement of a new question inserted after both a standard field and a custom question.
 2. Apply migration supabase/migrations/20261112170000_camp_form_fields_and_engagement.sql to CreatorHub project yufptpfiwdbzzrvhkvux. It is additive.
 3. Deploy the updated camp-email-bridge Edge Function with existing verify_jwt=false and retained private bearer digest. Do not change its secret/key configuration.
 4. Verify bridge endpoint actions from authenticated paths and test no-client-token unauthorized access; admin_field_list / admin_form_report / admin_export_submissions must reject unauthorized JWTs.
