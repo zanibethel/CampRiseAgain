@@ -648,6 +648,14 @@ header { z-index: 30; }
     box-shadow: 0 18px 46px rgba(8, 47, 36, .18);
   }
   header .mobile-menu-panel[hidden] { display: none !important; }
+  header .mobile-menu-action-group {
+    display: grid;
+    gap: 6px;
+    padding: 12px 0;
+    margin: 8px 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
   header .mobile-menu-link {
     display: flex;
     align-items: center;
