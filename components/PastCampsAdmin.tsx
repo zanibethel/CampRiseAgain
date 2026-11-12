@@ -155,6 +155,16 @@ export default function PastCampsAdmin() {
     let nextIndex=0;
     let succeeded=0;
     let failed=0;
+    // Serialize metadata reservation to avoid duplicate album sort positions.
+    // File compression and signed storage uploads can still run concurrently.
+    let prepareQueue:Promise<unknown>=Promise.resolve();
+    function prepareTicket(mime_type:string,bytes:number) {
+      const ticket=prepareQueue.then(()=>api("admin_gallery_prepare_upload",{
+        album_id:albumId,mime_type,bytes,
+      }));
+      prepareQueue=ticket.then(()=>undefined,()=>undefined);
+      return ticket;
+    }
     const mark=(id:string,update:Partial<UploadQueueItem>)=>{
       setUploadQueue(current=>current.map(item=>item.id===id?{...item,...update}:item));
     };
@@ -169,9 +179,7 @@ export default function PastCampsAdmin() {
             if(!validGalleryUpload(prepared.mime,prepared.file.size))
               throw new Error("File is outside the supported type or size limits.");
             mark(item.id,{stage:"uploading"});
-            const ticket=await api("admin_gallery_prepare_upload",{
-              album_id:albumId,mime_type:prepared.mime,bytes:prepared.file.size,
-            });
+            const ticket=await prepareTicket(prepared.mime,prepared.file.size);
             const {error:uploadError}=await supabase.storage.from(ticket.bucket)
               .uploadToSignedUrl(ticket.path,ticket.uploadToken,prepared.file,{
                 contentType:prepared.mime,upsert:false,
@@ -325,7 +333,8 @@ export default function PastCampsAdmin() {
       <h3>Photos & Videos</h3>
       <p className="section-copy">Select up to {MAX_UPLOAD_SELECTION} photos or videos at once, including all 45 photos from a phone.
         Photos are automatically optimized; videos must be 45 MB or smaller. MP4 and WebM play most reliably.
-        Files upload privately and any failures can be retried individually without repeating successful uploads.</p>
+        Files upload privately and any failures can be retried individually without repeating successful uploads.
+        Keep this page open until the batch finishes.</p>
       <div className="field">
         <label htmlFor="camp-media-upload">Upload to {selected.title}</label>
         <input id="camp-media-upload" type="file" multiple disabled={busy}
