@@ -9,6 +9,7 @@ create table if not exists public.camp_rise_again_form_fields (
   form_kind text not null check (form_kind in ('camper', 'volunteer')),
   field_key text not null check (field_key ~ '^[a-z][a-z0-9_]{1,47}$'),
   label text not null check (char_length(label) between 3 and 160),
+  after_field text check (after_field is null or char_length(after_field) between 2 and 48),
   input_type text not null check (input_type in ('short_text','long_text','select','multi_select','checkbox')),
   choices text[] not null default '{}',
   required boolean not null default false,
@@ -27,15 +28,15 @@ create index if not exists camp_form_fields_order_idx
 
 -- Start with non-clinical, optional questions; staff can edit and add through /admin.
 insert into public.camp_rise_again_form_fields
-(form_kind,field_key,label,input_type,choices,required,sort_order)
+(form_kind,field_key,label,input_type,choices,required,sort_order,after_field)
 values
-('camper','how_heard','How did you hear about Camp Rise Again?','select',array['Friend or family','Social media','Community organization','Online search','Other'],false,10),
-('camper','preferred_contact','How would you prefer we contact you?','select',array['Email','Phone call','Text message'],false,20),
-('camper','first_camp','Will this be your first Camp Rise Again event?','checkbox','{}',false,30),
-('volunteer','how_heard','How did you hear about Camp Rise Again?','select',array['Friend or family','Social media','Community organization','Online search','Other'],false,10),
-('volunteer','preferred_contact','How would you prefer we contact you?','select',array['Email','Phone call','Text message'],false,20),
-('volunteer','availability','When are you generally available?','multi_select',array['Weekdays','Weeknights','Weekends','Flexible'],false,30),
-('volunteer','relevant_experience','Relevant skills or volunteer experience (optional)','long_text','{}',false,40)
+('camper','how_heard','How did you hear about Camp Rise Again?','select',array['Friend or family','Social media','Community organization','Online search','Other'],false,10,'season'),
+('camper','preferred_contact','How would you prefer we contact you?','select',array['Email','Phone call','Text message'],false,20,'how_heard'),
+('camper','first_camp','Will this be your first Camp Rise Again event?','checkbox','{}',false,30,'preferred_contact'),
+('volunteer','how_heard','How did you hear about Camp Rise Again?','select',array['Friend or family','Social media','Community organization','Online search','Other'],false,10,'season'),
+('volunteer','preferred_contact','How would you prefer we contact you?','select',array['Email','Phone call','Text message'],false,20,'how_heard'),
+('volunteer','availability','When are you generally available?','multi_select',array['Weekdays','Weeknights','Weekends','Flexible'],false,30,'preferred_contact'),
+('volunteer','relevant_experience','Relevant skills or volunteer experience (optional)','long_text','{}',false,40,'availability')
 on conflict (form_kind,field_key) do nothing;
 
 comment on table public.camp_rise_again_form_fields is
