@@ -366,7 +366,7 @@ Deno.serve(async (request: Request) => {
             continue;
           }
           if (q.input_type === "checkbox") {
-            if (typeof value !== "boolean") return respond({error:"Invalid checkbox answer"},400);
+            if (typeof value !== "boolean" || (q.required && value !== true)) return respond({error:"Invalid checkbox answer"},400);
             answers[q.field_key] = value;
           } else if (q.input_type === "select") {
             if (typeof value !== "string" || !(q.choices as string[]).includes(value))
