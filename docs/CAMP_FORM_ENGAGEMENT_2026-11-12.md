@@ -8,7 +8,7 @@ Date: 2026-11-12
 - Added starter optional questions for discovery source, preferred contact method, first camp, volunteer availability and experience. Review all wording with the camp team before making questions required.
 - Each application saves validated answers to the existing restricted Supabase table's extra_answers JSONB column.
 - The admin engagement summary shows exact total and last-30-day counts of camper, volunteer and contact submissions, plus volunteer interest breakdown.
-- Admin CSV export includes saved full answers (including extra answers), up to 1,000 records per type; larger exports are flagged as incomplete. Keep downloaded CSVs private.
+- Admin engagement CSV export includes contact and engagement details plus configured answers, but deliberately excludes street addresses, birthdays, open-text notes and messages. Up to 1,000 records per type; larger exports are flagged as incomplete. Keep downloaded CSVs private.
 
 ## Security and privacy
 - Storage is only in the existing shared CreatorHub Supabase project. No public Data API access is granted to the applicant records or field configuration table.
@@ -18,7 +18,7 @@ Date: 2026-11-12
 - Notification emails continue to contain only a reference and a link to the protected admin portal.
 - Collect only necessary, non-clinical information. Do not ask for diagnoses, medications, or mental-health histories in configurable fields.
 - Reports count submitted forms, not distinct people and not anonymous site visitors; repeated legitimate applications remain separate rows.
-- CSV exports are private and should not be forwarded or stored in publicly shared drives.
+- CSV exports are private and should not be forwarded or stored in publicly shared drives. Individual sensitive application details remain visible only in the authenticated submission detail view.
 
 ## Deployment order
 1. Review PR and run build/type checks. Verify existing tests and new routes.
