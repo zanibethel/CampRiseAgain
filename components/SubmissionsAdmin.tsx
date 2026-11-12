@@ -15,6 +15,7 @@ type Report = {
   counts:Record<"camper"|"volunteer"|"contact",Counters>;
   roleCounts:Record<string,number>;
   seasonCounts:Record<string,number>;
+  sourceCounts:Record<string,number>;
   preferencesSampled:boolean;
 };
 const roleLabels:Record<string,string>={
@@ -140,6 +141,15 @@ export default function SubmissionsAdmin() {
                 <span>{roleLabels[role] || role}</span><strong>{count}</strong>
               </div>)}
           </div>}
+        <h4 style={{marginTop:20}}>How people found us</h4>
+        {Object.keys(report.sourceCounts || {}).length===0
+          ? <p className="section-copy">No discovery sources collected yet.</p>
+          : <div style={{display:"grid",gap:8}}>
+              {Object.entries(report.sourceCounts).sort((a,b)=>b[1]-a[1]).map(([source,count])=>
+                <div key={source} style={{display:"flex",justifyContent:"space-between",gap:12}}>
+                  <span>{source}</span><strong>{count}</strong>
+                </div>)}
+            </div>}
         {report.preferencesSampled && <p className="section-copy">Preference breakdown samples up to 1,000 submissions per form; totals remain exact.</p>}
       </div>}
       <div className="actions">
