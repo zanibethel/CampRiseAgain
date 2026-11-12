@@ -2,11 +2,12 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { orderedCampFields, fieldsFollowing } from "@/lib/camp-form-layout";
 
 type Kind = "camper" | "volunteer" | "contact";
 type ExtraField = {
   field_key:string; label:string; input_type:"short_text"|"long_text"|"select"|"multi_select"|"checkbox";
-  choices:string[]; required:boolean; sort_order:number;
+  choices:string[]; required:boolean; sort_order:number; after_field:string|null;
 };
 const roles = [
   ["food_beverage", "Food & beverage"],
@@ -59,6 +60,37 @@ export default function CampSubmissionForm({ kind }: { kind: Kind }) {
   const isContact = kind === "contact";
   const isCamper = kind === "camper";
   const config = paths[kind];
+  const placedFields = kind === "contact" ? [] : orderedCampFields(kind,extraFields);
+
+  function renderExtraField(field: ExtraField) {
+    const name = "extra." + field.field_key;
+    const id = "extra-" + field.field_key;
+    if (field.input_type === "checkbox") return <label key={name} className="checks"
+      style={{display:"flex",alignItems:"center",gap:10,margin:"12px 0"}}>
+      <input type="checkbox" name={name} value="yes" required={field.required}/>
+      {field.label}{field.required ? " *" : ""}
+    </label>;
+    if (field.input_type === "multi_select") return <fieldset key={name}
+      style={{margin:"12px 0"}}><legend>{field.label}{field.required ? " *" : ""}</legend>
+      <div className="checks">{field.choices.map(choice=><label key={choice}>
+        <input type="checkbox" name={name} value={choice}/>{choice}
+      </label>)}</div>
+    </fieldset>;
+    return <div className="field" key={name} style={{gridColumn:"1 / -1"}}>
+      <label htmlFor={id}>{field.label}{field.required ? " *" : ""}</label>
+      {field.input_type === "select" ?
+        <select id={id} name={name} defaultValue="" required={field.required}>
+          <option value="">{field.required ? "Choose an option" : "No preference / Skip"}</option>
+          {field.choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}
+        </select> : field.input_type === "long_text" ?
+        <textarea id={id} name={name} rows={3} maxLength={1000} required={field.required}/> :
+        <input id={id} name={name} maxLength={200} required={field.required}/>}
+    </div>;
+  }
+  // Insertion anchors match the ordering shown in each administrator's editor.
+  function after(key: string) {
+    return fieldsFollowing(placedFields,key).map(renderExtraField);
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -156,30 +188,31 @@ export default function CampSubmissionForm({ kind }: { kind: Kind }) {
       ) : (
         <>
           <div className="field-grid">
-            <div className="field"><label htmlFor="firstName">First name</label><input id="firstName" name="firstName" autoComplete="given-name" maxLength={100} required /></div>
-            <div className="field"><label htmlFor="lastName">Last name</label><input id="lastName" name="lastName" autoComplete="family-name" maxLength={100} required /></div>
+            <div className="field"><label htmlFor="firstName">First name</label><input id="firstName" name="firstName" autoComplete="given-name" maxLength={100} required /></div>{after("firstName")}
+            <div className="field"><label htmlFor="lastName">Last name</label><input id="lastName" name="lastName" autoComplete="family-name" maxLength={100} required /></div>{after("lastName")}
           </div>
           <div className="field-grid">
-            <div className="field"><label htmlFor="email">Email</label><input id="email" name="email" autoComplete="email" type="email" required /></div>
-            <div className="field"><label htmlFor="phone">Phone</label><input id="phone" name="phone" autoComplete="tel" type="tel" maxLength={40} required /></div>
+            <div className="field"><label htmlFor="email">Email</label><input id="email" name="email" autoComplete="email" type="email" required /></div>{after("email")}
+            <div className="field"><label htmlFor="phone">Phone</label><input id="phone" name="phone" autoComplete="tel" type="tel" maxLength={40} required /></div>{after("phone")}
           </div>
           {isCamper && (
             <>
-              <div className="field"><label htmlFor="address1">Street address</label><input id="address1" name="address1" maxLength={250} autoComplete="street-address" required /></div>
-              <div className="field"><label htmlFor="address2">Apt / unit (optional)</label><input id="address2" name="address2" maxLength={120} /></div>
+              <div className="field"><label htmlFor="address1">Street address</label><input id="address1" name="address1" maxLength={250} autoComplete="street-address" required /></div>{after("address1")}
+              <div className="field"><label htmlFor="address2">Apt / unit (optional)</label><input id="address2" name="address2" maxLength={120} /></div>{after("address2")}
               <div className="field-grid">
-                <div className="field"><label htmlFor="city">City</label><input id="city" name="city" autoComplete="address-level2" maxLength={100} required /></div>
-                <div className="field"><label htmlFor="state">State</label><input id="state" name="state" autoComplete="address-level1" maxLength={60} required /></div>
+                <div className="field"><label htmlFor="city">City</label><input id="city" name="city" autoComplete="address-level2" maxLength={100} required /></div>{after("city")}
+                <div className="field"><label htmlFor="state">State</label><input id="state" name="state" autoComplete="address-level1" maxLength={60} required /></div>{after("state")}
               </div>
               <div className="field-grid">
-                <div className="field"><label htmlFor="postalCode">ZIP code</label><input id="postalCode" name="postalCode" autoComplete="postal-code" maxLength={20} required /></div>
-                <div className="field"><label htmlFor="dateOfBirth">Birthday</label><input id="dateOfBirth" name="dateOfBirth" type="date" required /></div>
+                <div className="field"><label htmlFor="postalCode">ZIP code</label><input id="postalCode" name="postalCode" autoComplete="postal-code" maxLength={20} required /></div>{after("postalCode")}
+                <div className="field"><label htmlFor="dateOfBirth">Birthday</label><input id="dateOfBirth" name="dateOfBirth" type="date" required /></div>{after("dateOfBirth")}
               </div>
               <div className="field"><label htmlFor="shirtSize">Shirt size</label>
                 <select id="shirtSize" name="shirtSize" required defaultValue=""><option value="" disabled>Choose a size</option>
                   {["XS","S","M","L","XL","2XL","3XL","4XL"].map(x=><option key={x}>{x}</option>)}
                 </select>
               </div>
+              {after("shirtSize")}
             </>
           )}
           <div className="field"><label htmlFor="season">Preferred camp season</label>
@@ -189,44 +222,16 @@ export default function CampSubmissionForm({ kind }: { kind: Kind }) {
               <option value={isCamper ? "either":"both"}>{isCamper ? "Either / No preference":"Both"}</option>
             </select>
           </div>
+          {after("season")}
           {!isCamper && (
             <fieldset><legend>Volunteer interests</legend><div className="checks">
               {roles.map(([value,label])=><label key={value}><input type="checkbox" name="roles" value={value}/>{label}</label>)}
             </div></fieldset>
           )}
+          {!isCamper && after("roles")}
           {extraError && <p className="status" role="alert">{extraError}</p>}
-          {!isContact && extraFields.length > 0 && (
-            <fieldset>
-              <legend>Additional questions</legend>
-              <p className="section-copy">These details help us plan and follow up. Required questions are marked.</p>
-              {extraFields.map(field => {
-                const name = "extra." + field.field_key;
-                const id = "extra-" + field.field_key;
-                if (field.input_type === "checkbox") return <label key={name} className="checks"
-                  style={{display:"flex",alignItems:"center",gap:10,margin:"12px 0"}}>
-                  <input type="checkbox" name={name} value="yes" required={field.required}/>
-                  {field.label}{field.required ? " *" : ""}
-                </label>;
-                if (field.input_type === "multi_select") return <fieldset key={name}
-                  style={{margin:"12px 0"}}><legend>{field.label}{field.required ? " *" : ""}</legend>
-                  <div className="checks">{field.choices.map(choice=><label key={choice}>
-                    <input type="checkbox" name={name} value={choice}/>{choice}
-                  </label>)}</div>
-                </fieldset>;
-                return <div className="field" key={name}>
-                  <label htmlFor={id}>{field.label}{field.required ? " *" : ""}</label>
-                  {field.input_type === "select" ?
-                    <select id={id} name={name} defaultValue="" required={field.required}>
-                      <option value="">{field.required ? "Choose an option" : "No preference / Skip"}</option>
-                      {field.choices.map(choice=><option key={choice} value={choice}>{choice}</option>)}
-                    </select> : field.input_type === "long_text" ?
-                    <textarea id={id} name={name} rows={3} maxLength={1000} required={field.required}/> :
-                    <input id={id} name={name} maxLength={200} required={field.required}/>}
-                </div>;
-              })}
-            </fieldset>
-          )}
           <div className="field"><label htmlFor="notes">{isCamper ? "Anything else we should know? (optional)" : "Experience, availability, or notes (optional)"}</label><textarea id="notes" name="notes" maxLength={2000} rows={4}/></div>
+          {after("notes")}
         </>
       )}
 
