@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { Resend } from "resend";
 import { campBridge, CampBridgeError } from "@/lib/camp-supabase-bridge";
-import { CAMP_MAILING_FROM, campaignEmailText } from "@/lib/camp-mailing";
+import { CAMP_MAILING_FROM, campaignEmailText, unsubscribeUrl } from "@/lib/camp-mailing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,7 +65,7 @@ export async function POST(request:Request) {
           const {data,error}=await resend.emails.send({
             from:CAMP_MAILING_FROM,to:[email],subject:campaign.subject,
             text:campaignEmailText(campaign.body,email,signKey),
-            headers:{"List-Unsubscribe":"<"+(await import("@/lib/camp-mailing")).unsubscribeUrl(email,signKey)+">"},
+            headers:{"List-Unsubscribe":"<"+unsubscribeUrl(email,signKey)+">"},
           },{idempotencyKey:"camp-campaign:"+id+":"+hash});
           if(error)throw Error(error.name);
           await campBridge("admin_campaign_result",{id,email,delivered:true,
