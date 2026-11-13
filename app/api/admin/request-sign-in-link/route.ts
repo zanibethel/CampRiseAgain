@@ -47,7 +47,7 @@ export async function POST(request: Request) {
   }
   const supplied = (input as { email?: unknown }).email;
   if (typeof supplied !== "string" || supplied.length > 254 ||
-      !/^[^@\\s<>]+@[^@\\s<>]+\\.[^@\\s<>]+$/.test(supplied.trim())) {
+      !/^[^@\s<>]+@[^@\s<>]+\.[^@\s<>]+$/.test(supplied.trim())) {
     return json({ error: "Enter a valid email address." }, 400);
   }
   const email = supplied.trim().toLowerCase();
