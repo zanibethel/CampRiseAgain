@@ -8,12 +8,13 @@ import MemorialGalleryAdmin from "@/components/MemorialGalleryAdmin";
 import VisitorAnalyticsAdmin from "@/components/VisitorAnalyticsAdmin";
 import EmailForwardingAdmin from "@/components/EmailForwardingAdmin";
 import SubmissionsAdmin from "@/components/SubmissionsAdmin";
+import CampCRMAdmin from "@/components/CampCRMAdmin";
 import FAQAdmin from "@/components/FAQAdmin";
 import PastCampsAdmin from "@/components/PastCampsAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const ADMINS = ["schofieldtierra@gmail.com", "zanibethel@gmail.com"];
-type AdminSection = "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "submissions" | "faq" | "past-camps";
+type AdminSection = "crm" | "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "submissions" | "faq" | "past-camps";
 
 type ResourceItem = {
   id: number;
@@ -347,6 +348,7 @@ export default function AdminPage() {
   }
 
   const tabs: { id: AdminSection; label: string; description: string }[] = [
+    { id: "crm", label: "Contacts & Announcements", description: "CRM, newsletter drafts, opt-in subscribers and delivery" },
     { id: "analytics", label: "Visitor Analytics", description: "Visitors, page views, trends, and top pages" },
     { id: "email", label: "Email Forwarding", description: "Gmail forwarding recipients and reply signatures" },
     { id: "submissions", label: "Form Submissions", description: "Review camper, volunteer and contact forms privately" },
@@ -367,6 +369,7 @@ export default function AdminPage() {
       <div className="actions" style={{ marginBottom: 24 }}><a className="btn btn-primary" href="/" target="_blank" rel="noreferrer">Preview Site ↗</a><button className="btn btn-secondary" type="button" onClick={signOut}>Sign Out</button></div>
 
       <div id="admin-section-content" style={{ scrollMarginTop: 20 }}>
+      {activeSection === "crm" && <CampCRMAdmin />}
       {activeSection === "analytics" && <VisitorAnalyticsAdmin />}
       {activeSection === "email" && <EmailForwardingAdmin />}
       {activeSection === "submissions" && <SubmissionsAdmin />}
