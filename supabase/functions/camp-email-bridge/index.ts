@@ -952,16 +952,44 @@ Deno.serve(async (request: Request) => {
       return error?respond({error:"Unable to update contact"},503):
         data?respond({ok:true}):respond({error:"Contact not found"},404);
     }
+    if (action === "admin_mailing_settings_update") {
+      // Staff edit the mailing address in /admin, not environment variables.
+      const rawAddress=params.postal_address;
+      const address=typeof rawAddress==="string" ? rawAddress.trim() : "";
+      const confirmed=params.address_confirmed===true;
+      if(typeof rawAddress!=="string" || rawAddress.length>500 ||
+        (address && (address.length<10 || address.length>500)) ||
+        (confirmed && !address) ||
+        typeof params.address_confirmed!=="boolean") {
+        return respond({error:"Enter a valid organization mailing address or PO Box and confirm it."},400);
+      }
+      const {data,error}=await db.from("camp_rise_again_mailing_settings")
+        .update({postal_address:address,address_confirmed:confirmed,
+          updated_at:new Date().toISOString(),updated_by:adminEmail})
+        .eq("id",1)
+        .select("postal_address,address_confirmed,updated_at,updated_by").maybeSingle();
+      return error?respond({error:"Unable to save mailing settings"},503):
+        data?respond({settings:data,ready:data.address_confirmed && data.postal_address.length>=10}):
+          respond({error:"Mailing settings not initialized. Apply the database migration."},503);
+    }
+
     if (action === "admin_campaign_list") {
-      const [campaigns,mailing]=await Promise.all([
+      const [campaigns,mailing,settings]=await Promise.all([
         db.from("camp_rise_again_campaigns")
           .select("id,kind,subject,body,status,created_at,updated_at,created_by,completed_at")
           .order("created_at",{ascending:false}).limit(100),
         db.from("camp_rise_again_mailing_subscribers")
           .select("email",{head:true,count:"exact"}).eq("status","subscribed"),
+        db.from("camp_rise_again_mailing_settings")
+          .select("postal_address,address_confirmed,updated_at,updated_by")
+          .eq("id",1).maybeSingle(),
       ]);
-      if(campaigns.error || mailing.error)return respond({error:"Unable to load campaigns"},503);
-      return respond({campaigns:campaigns.data||[],subscribers:mailing.count||0});
+      if(campaigns.error || mailing.error || settings.error || !settings.data)
+        return respond({error:"Unable to load mailing configuration"},503);
+      const mailingReady=settings.data.address_confirmed===true &&
+        settings.data.postal_address.trim().length>=10;
+      return respond({campaigns:campaigns.data||[],subscribers:mailing.count||0,
+        mailing_settings:settings.data,mailing_ready:mailingReady});
     }
     if (action === "admin_campaign_save") {
       const id=str(params.id,64),kind=str(params.kind,20),subject=str(params.subject,150),
@@ -984,6 +1012,11 @@ Deno.serve(async (request: Request) => {
     if (action === "admin_campaign_begin") {
       const id=str(params.id,64);
       if(!UUID.test(id))return respond({error:"Invalid campaign"},400);
+      const {data:settings,error:settingsError}=await db.from("camp_rise_again_mailing_settings")
+        .select("postal_address,address_confirmed").eq("id",1).maybeSingle();
+      if(settingsError)return respond({error:"Unable to check mailing settings"},503);
+      if(!settings?.address_confirmed || settings.postal_address.trim().length<10)
+        return respond({error:"Complete and confirm the mailing address in the admin portal before sending."},409);
       const {data:recipients,error:mailError}=await db.from("camp_rise_again_mailing_subscribers")
         .select("email").eq("status","subscribed").order("email").limit(501);
       if(mailError)return respond({error:"Unable to verify subscribers"},503);
@@ -1005,6 +1038,11 @@ Deno.serve(async (request: Request) => {
     if (action === "admin_campaign_claim") {
       const id=str(params.id,64);
       if(!UUID.test(id))return respond({error:"Invalid campaign"},400);
+      const {data:settings,error:settingsError}=await db.from("camp_rise_again_mailing_settings")
+        .select("postal_address,address_confirmed").eq("id",1).maybeSingle();
+      if(settingsError)return respond({error:"Unable to check mailing settings"},503);
+      if(!settings?.address_confirmed || settings.postal_address.trim().length<10)
+        return respond({error:"Complete and confirm the mailing address in the admin portal before sending."},409);
       const {data,error}=await db.rpc("camp_rise_again_claim_campaign_batch",{p_campaign_id:id,p_limit:10});
       return error?respond({error:"Unable to claim deliveries"},503):
         respond({emails:(data||[]).map((x:{recipient_email:string})=>x.recipient_email)});
