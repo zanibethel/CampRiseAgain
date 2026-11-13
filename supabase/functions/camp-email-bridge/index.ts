@@ -121,6 +121,36 @@ Deno.serve(async (request: Request) => {
       }
       return respond({ actionLink: data.properties.action_link });
     }
+    if (action === "generate_camp_signin_link") {
+      // Scoped to approved Camp admins; never expose token or accept arbitrary redirect.
+      // The Vercel caller verifies origin and sends the link through Resend.
+      const recipient = email(params.email);
+      const ipFingerprint = str(params.ipFingerprint, 64);
+      const emailFingerprint = str(params.emailFingerprint, 64);
+      if (!recipient || !ADMIN_EMAILS.has(recipient) ||
+          !SHA256.test(ipFingerprint) || !SHA256.test(emailFingerprint)) {
+        return respond({ error: "Sign-in request not authorized" }, 403);
+      }
+      const { data: ipAllowed, error: ipError } = await db.rpc("camp_rise_again_claim_form_rate", {
+        p_fingerprint: ipFingerprint, p_limit: 3, p_window_seconds: 900,
+      });
+      if (ipError) return respond({ error: "Sign-in service unavailable" }, 503);
+      if (!ipAllowed) return respond({ error: "Too many requests" }, 429);
+      const { data: emailAllowed, error: emailError } = await db.rpc("camp_rise_again_claim_form_rate", {
+        p_fingerprint: emailFingerprint, p_limit: 5, p_window_seconds: 3600,
+      });
+      if (emailError) return respond({ error: "Sign-in service unavailable" }, 503);
+      if (!emailAllowed) return respond({ error: "Too many requests" }, 429);
+      const { data, error } = await db.auth.admin.generateLink({
+        type: "magiclink",
+        email: recipient,
+        options: { redirectTo: "https://campriseagain.org/admin" },
+      });
+      if (error || typeof data?.properties?.action_link !== "string") {
+        return respond({ error: "Unable to generate sign-in link" }, 503);
+      }
+      return respond({ actionLink: data.properties.action_link });
+    }
     if (action === "ping") {
       const { error } = await db.from("camp_rise_again_email_forwarders").select("id").limit(1);
       return error ? respond({ error: "Data query failed" }, 503) : respond({ ok: true });
