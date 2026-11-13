@@ -1,0 +1,228 @@
+"use client";
+
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+
+type Contact={
+  email:string;display_name:string;phone:string;source_kinds:string[];stage:string;
+  tags:string[];notes:string;last_engaged_at:string|null;mailing_status:string;
+};
+type Campaign={
+  id:string;kind:"announcement"|"newsletter";subject:string;body:string;
+  status:"draft"|"sending"|"sent";created_at:string;completed_at:string|null;
+};
+type ContactsResponse={contacts:Contact[];total:number;truncated:boolean};
+type CampaignsResponse={campaigns:Campaign[];subscribers:number};
+const stages=["new","follow_up","active","alumni","archived"] as const;
+const stageName=(stage:string)=>stage.replaceAll("_"," ").replace(/\b\w/g,x=>x.toUpperCase());
+
+async function adminCall(view:string,body?:Record<string,unknown>) {
+  const {data,error}=await getSupabaseBrowserClient().auth.getSession();
+  if(error||!data.session?.access_token)throw new Error("Sign in to use the CRM.");
+  const response=await fetch("/api/admin/crm"+(body?"":"?view="+view),{
+    method:body?"POST":"GET",
+    headers:{
+      Authorization:"Bearer "+data.session.access_token,
+      ...(body?{"Content-Type":"application/json"}:{}),
+    },
+    body:body?JSON.stringify(body):undefined,
+    cache:"no-store",
+  });
+  const result=await response.json();
+  if(!response.ok)throw new Error(result.error||"CRM request failed.");
+  return result;
+}
+
+export default function CampCRMAdmin() {
+  const [section,setSection]=useState<"contacts"|"campaigns">("contacts");
+  const [contacts,setContacts]=useState<Contact[]>([]);
+  const [total,setTotal]=useState(0);
+  const [truncated,setTruncated]=useState(false);
+  const [campaigns,setCampaigns]=useState<Campaign[]>([]);
+  const [subscribers,setSubscribers]=useState(0);
+  const [selected,setSelected]=useState<Contact|null>(null);
+  const [search,setSearch]=useState("");
+  const [status,setStatus]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [newContact,setNewContact]=useState({display_name:"",email:"",phone:""});
+  const [draft,setDraft]=useState<{id?:string;kind:"announcement"|"newsletter";subject:string;body:string}>({
+    kind:"announcement",subject:"",body:"",
+  });
+
+  const loadContacts=useCallback(async()=>{
+    const data=await adminCall("contacts") as ContactsResponse;
+    setContacts(data.contacts||[]);setTotal(data.total||0);setTruncated(Boolean(data.truncated));
+  },[]);
+  const loadCampaigns=useCallback(async()=>{
+    const data=await adminCall("campaigns") as CampaignsResponse;
+    setCampaigns(data.campaigns||[]);setSubscribers(data.subscribers||0);
+  },[]);
+  useEffect(()=>{
+    let active=true;
+    setBusy(true);
+    Promise.all([loadContacts(),loadCampaigns()])
+      .catch(error=>{if(active)setStatus(error instanceof Error?error.message:"CRM unavailable.");})
+      .finally(()=>{if(active)setBusy(false);});
+    return()=>{active=false;};
+  },[loadContacts,loadCampaigns]);
+
+  const visible=useMemo(()=>{
+    const q=search.trim().toLowerCase();
+    return contacts.filter(c=>!q||[c.email,c.display_name,c.phone,...c.tags,...c.source_kinds]
+      .some(x=>x.toLowerCase().includes(q)));
+  },[contacts,search]);
+  async function addContact(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();setBusy(true);setStatus("");
+    try{
+      await adminCall("contacts",{action:"add_contact",...newContact});
+      await loadContacts();setNewContact({display_name:"",email:"",phone:""});
+      setStatus("Contact added.");
+    }catch(error){setStatus(error instanceof Error?error.message:"Unable to add contact.");}
+    finally{setBusy(false);}
+  }
+  async function saveContact(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();if(!selected)return;
+    setBusy(true);setStatus("");
+    try{
+      await adminCall("contacts",{action:"update_contact",...selected});
+      await loadContacts();setStatus("Contact updated.");
+    }catch(error){setStatus(error instanceof Error?error.message:"Unable to update contact.");}
+    finally{setBusy(false);}
+  }
+  async function saveDraft(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();setBusy(true);setStatus("");
+    try{
+      const saved=await adminCall("campaigns",{action:"save_campaign",...draft});
+      setDraft({...draft,id:saved.id});await loadCampaigns();
+      setStatus("Draft saved. Nothing has been sent.");
+    }catch(error){setStatus(error instanceof Error?error.message:"Could not save draft.");}
+    finally{setBusy(false);}
+  }
+  async function beginCampaign(id:string){
+    const item=campaigns.find(c=>c.id===id);
+    if(!item||!window.confirm("Send “"+item.subject+"” to up to "+subscribers+
+      " confirmed subscribers? This cannot be undone once sending begins."))return;
+    setBusy(true);setStatus("Preparing subscriber delivery queue…");
+    try{
+      await adminCall("campaigns",{action:"begin_campaign",id});
+      await loadCampaigns();setStatus("Queue prepared. Sending confirmed subscribers…");
+      await continueCampaign(id);
+    }catch(error){setStatus(error instanceof Error?error.message:"Campaign could not start.");}
+    finally{setBusy(false);}
+  }
+  async function continueCampaign(id:string){
+    setBusy(true);
+    let delivered=0,failures=0;
+    try{
+      // Small durable batches work around serverless execution limits.
+      for(let batch=0;batch<55;batch++){
+        const result=await adminCall("campaigns",{action:"send_batch",id});
+        delivered+=Number(result.sent||0);failures+=Number(result.failed||0);
+        const remaining=Number(result.remaining||0);
+        setStatus("Sent "+delivered+" email(s), "+failures+
+          " failed. "+remaining+" delivery record(s) remain.");
+        if(result.completed || (result.sent===0 && result.failed===0))break;
+      }
+      await loadCampaigns();
+      setStatus("Campaign run finished for now: "+delivered+" delivered, "+failures+
+        " failed. Reopen a still-sending campaign to resume outstanding batches.");
+    }catch(error){
+      setStatus((error instanceof Error?error.message:"Delivery interrupted.")+
+        " Completed emails are recorded; use Resume to continue safely.");
+    }finally{setBusy(false);}
+  }
+
+  return <section className="form-card" aria-label="Camp Rise Again CRM">
+    <h2>Contacts &amp; Announcements</h2>
+    <p className="section-copy">One contact per email across camp applications, volunteer forms, inquiries and newsletter signups. Intake answers stay in the protected Form Submissions panel.</p>
+    <div className="actions" style={{marginBottom:20}}>
+      <button type="button" className={"btn "+(section==="contacts"?"btn-primary":"btn-secondary")}
+        onClick={()=>setSection("contacts")}>Contacts ({total})</button>
+      <button type="button" className={"btn "+(section==="campaigns"?"btn-primary":"btn-secondary")}
+        onClick={()=>setSection("campaigns")}>Announcements &amp; Newsletters</button>
+    </div>
+    {status&&<p className="status" role="status" aria-live="polite">{status}</p>}
+    {section==="contacts"&&<>
+      <div className="card" style={{marginBottom:18}}>
+        <h3>Add contact</h3>
+        <form onSubmit={addContact}>
+          <div className="field-grid">
+            <div className="field"><label>Name</label><input required maxLength={160} value={newContact.display_name} onChange={e=>setNewContact({...newContact,display_name:e.target.value})}/></div>
+            <div className="field"><label>Email</label><input required type="email" value={newContact.email} onChange={e=>setNewContact({...newContact,email:e.target.value})}/></div>
+            <div className="field"><label>Phone (optional)</label><input maxLength={40} value={newContact.phone} onChange={e=>setNewContact({...newContact,phone:e.target.value})}/></div>
+          </div>
+          <button className="btn btn-secondary" disabled={busy}>+ Add Contact</button>
+        </form>
+        <p className="section-copy" style={{marginTop:12}}>Adding a person does not sign them up for promotional email. They must confirm their own subscription.</p>
+      </div>
+      <div className="field" style={{marginBottom:14}}>
+        <label htmlFor="crm-search">Search contacts</label>
+        <input id="crm-search" type="search" placeholder="Name, email, tag or relationship" value={search} onChange={e=>setSearch(e.target.value)}/>
+      </div>
+      <p className="section-copy">Showing {visible.length} of {total} contact(s). {truncated?"Showing the 500 most recent contacts; server-side pagination is still needed for larger lists.":""}</p>
+      <div style={{display:"grid",gap:8,maxHeight:390,overflowY:"auto",marginBottom:20}}>
+        {visible.map(c=><button type="button" key={c.email} className="card" onClick={()=>setSelected({...c})}
+          style={{textAlign:"left",cursor:"pointer",border:selected?.email===c.email?"2px solid currentColor":undefined}}>
+          <strong>{c.display_name||c.email}</strong>
+          <div style={{fontSize:13,overflowWrap:"anywhere"}}>{c.email} · {stageName(c.stage)} · {c.source_kinds.join(", ")||"Newsletter"}</div>
+          <div style={{fontSize:12,opacity:.8}}>Email updates: {stageName(c.mailing_status)}</div>
+        </button>)}
+      </div>
+      {selected&&<form className="card" onSubmit={saveContact}>
+        <h3>Edit contact</h3>
+        <p className="section-copy">Email: {selected.email} (fixed for deduplication). Mailing consent cannot be overridden by staff.</p>
+        <div className="field-grid">
+          <div className="field"><label>Name</label><input required maxLength={160} value={selected.display_name} onChange={e=>setSelected({...selected,display_name:e.target.value})}/></div>
+          <div className="field"><label>Phone</label><input maxLength={40} value={selected.phone} onChange={e=>setSelected({...selected,phone:e.target.value})}/></div>
+          <div className="field"><label>Stage</label><select value={selected.stage} onChange={e=>setSelected({...selected,stage:e.target.value})}>
+            {stages.map(s=><option key={s} value={s}>{stageName(s)}</option>)}</select></div>
+          <div className="field"><label>Tags (comma separated, up to 12)</label>
+            <input value={selected.tags.join(", ")} onChange={e=>setSelected({...selected,
+              tags:e.target.value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,12)})}/></div>
+        </div>
+        <div className="field"><label>Internal notes (private, non-clinical)</label>
+          <textarea maxLength={1000} rows={3} value={selected.notes} onChange={e=>setSelected({...selected,notes:e.target.value})}/></div>
+        <div className="actions"><button className="btn btn-primary" disabled={busy}>Save Contact</button>
+          <button type="button" className="btn btn-secondary" onClick={()=>setSelected(null)}>Close</button></div>
+      </form>}
+    </>}
+    {section==="campaigns"&&<>
+      <div className="card" style={{marginBottom:18}}>
+        <h3>Confirmed mailing list: {subscribers}</h3>
+        <p className="section-copy">Only people who used the email confirmation link receive newsletters or announcements. Sending is manually initiated and includes an unsubscribe link for every recipient.</p>
+        <a href="/newsletter" className="btn btn-secondary" target="_blank" rel="noreferrer">Preview Subscription Page</a>
+      </div>
+      <form className="card" onSubmit={saveDraft}>
+        <h3>{draft.id?"Edit draft":"Create announcement or newsletter"}</h3>
+        <div className="field"><label>Type</label><select value={draft.kind} onChange={e=>setDraft({...draft,kind:e.target.value as "announcement"|"newsletter"})}>
+          <option value="announcement">Announcement</option><option value="newsletter">Newsletter</option>
+        </select></div>
+        <div className="field"><label>Email subject</label>
+          <input required minLength={3} maxLength={150} value={draft.subject} onChange={e=>setDraft({...draft,subject:e.target.value})}/></div>
+        <div className="field"><label>Message (plain text)</label>
+          <textarea required minLength={10} maxLength={12000} rows={8} value={draft.body} onChange={e=>setDraft({...draft,body:e.target.value})}/></div>
+        <div className="actions"><button disabled={busy} className="btn btn-primary">Save Draft</button>
+          <button type="button" className="btn btn-secondary" onClick={()=>setDraft({kind:"announcement",subject:"",body:""})}>New Draft</button></div>
+        <p className="section-copy">Preview the content before sending. The footer and personalized unsubscribe link are added automatically.</p>
+        {draft.body&&<div style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",borderTop:"1px solid #ddd",marginTop:14,paddingTop:14}}>
+          <strong>{draft.subject||"Subject preview"}</strong><p>{draft.body}</p>
+          <small>Camp Rise Again · Subscription management link added per recipient</small>
+        </div>}
+      </form>
+      <h3 style={{marginTop:24}}>Campaigns</h3>
+      <div style={{display:"grid",gap:10}}>
+        {campaigns.map(item=><div className="card" key={item.id}>
+          <strong>{item.subject}</strong><div style={{fontSize:13,margin:"5px 0"}}>{stageName(item.kind)} · {stageName(item.status)} · {new Date(item.created_at).toLocaleDateString()}</div>
+          <div className="actions">
+            {item.status==="draft"&&<>
+              <button type="button" className="btn btn-secondary" onClick={()=>setDraft({id:item.id,kind:item.kind,subject:item.subject,body:item.body})}>Edit</button>
+              <button type="button" disabled={busy||subscribers===0} className="btn btn-primary" onClick={()=>void beginCampaign(item.id)}>Confirm &amp; Send</button>
+            </>}
+            {item.status==="sending"&&<button type="button" className="btn btn-primary" disabled={busy} onClick={()=>void continueCampaign(item.id)}>Resume Sending</button>}
+          </div>
+        </div>)}
+        {!campaigns.length&&<p className="section-copy">No announcements yet. Save the first draft above.</p>}
+      </div>
+    </>}
+  </section>;
+}
