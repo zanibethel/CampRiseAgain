@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { campPasswordUpdateErrorMessage } from "@/lib/camp-auth-password-errors";
 
 const ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com"]);
 
@@ -92,7 +93,7 @@ export default function CreateAdminPassword() {
 
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
-        setStatus("Could not save your password. Try a different strong password, or request a new recovery link.");
+        setStatus(campPasswordUpdateErrorMessage(error));
         return;
       }
 
