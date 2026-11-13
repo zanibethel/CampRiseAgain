@@ -13,8 +13,6 @@ import PastCampsAdmin from "@/components/PastCampsAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 const ADMINS = ["schofieldtierra@gmail.com", "zanibethel@gmail.com", "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"];
-// These two approved admins can create their Supabase login on their first magic-link sign-in.
-const NEW_CAMP_ADMINS = new Set(["matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"]);
 type AdminSection = "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "submissions" | "faq" | "past-camps";
 
 type ResourceItem = {
@@ -175,21 +173,28 @@ export default function AdminPage() {
   }
 
   async function sendLogin() {
-    if (!supabase || authBusy) return;
+    if (authBusy) return;
     const normalized = authorizedEmail();
     if (!normalized) return;
 
     setAuthBusy(true);
     setStatus("Sending secure sign-in link…");
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: normalized,
-        options: {
-          emailRedirectTo: `${window.location.origin}/admin`,
-          shouldCreateUser: NEW_CAMP_ADMINS.has(normalized),
-        },
+      const response = await fetch("/api/admin/request-sign-in-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalized }),
+        cache: "no-store",
       });
-      setStatus(error ? "Unable to send the sign-in email. Please try again shortly." : "Check your email for a secure sign-in link. Open it in this browser if possible. Older links cannot be reused.");
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(response.status === 429
+          ? "Too many requests. Try again later."
+          : "Unable to send the sign-in email. Please try again shortly.");
+        return;
+      }
+      setStatus(typeof result.message === "string" ? result.message :
+        "Check your email for a secure Camp Rise Again sign-in link. Open it in this browser if possible.");
     } catch {
       setStatus("Could not request a sign-in link. Please try again.");
     } finally {

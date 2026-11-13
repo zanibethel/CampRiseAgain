@@ -60,13 +60,16 @@ which were already required by the original password-recovery flow.
    Revert this single app commit if needed to restore the previous
    `resetPasswordForEmail` flow.
 
-## Out of scope
+## November 12: Camp-branded admin sign-in and forwarding verification
 
-Camp's existing **Email Me a Sign-In Link** still uses the
-project's default Supabase Auth email. Its sender is not changed.
-Future customization can use the same app-scoped approach, but needs
-the same rate limits and explicit user verification to avoid creating
-new Supabase accounts with a magic-link action.
+- The **Email Me a Sign-In Link** button now calls a Camp-only, same-origin Vercel endpoint instead of Supabase's shared email sender.
+- The endpoint uses the protected Supabase Edge bridge's `generate_camp_signin_link` action to create a Supabase `magiclink`, enforcing the approved four-admin allowlist and atomic IP/recipient rate limits before sending.
+- Resend delivers the sign-in email as **Camp Rise Again Support <support@campriseagain.org>** with a clickable **Sign In to Camp Rise Again** link. The only permitted redirect is `https://campriseagain.org/admin`; the one-time URL never enters responses or logs.
+- The two newly approved admins can request an emailed sign-in link without an existing account; only control of the allowlisted mailbox permits completing sign-in. Supabase may create a pending Auth record before the link is clicked, but the admin session requires link verification.
+- **Forwarding verification** emails now also come from Support and contain a clickable **Confirm Email Forwarding** link. Older invitations already sent from `info@campriseagain.org` do not change retroactively and can still be used while valid; sending a replacement token invalidates the earlier verification link.
+- Camp's separate inbox reply relay and messages received at `info@campriseagain.org`, `volunteer@campriseagain.org`, or `forms@campriseagain.org` remain unchanged.
+- No global SMTP, Auth Hook, or shared CreatorHub email template was modified.
+
 
 ## November 12 repair
 

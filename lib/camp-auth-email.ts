@@ -72,3 +72,55 @@ export function campPasswordRecoveryEmail(link: string) {
     ].join(""),
   };
 }
+
+export const CAMP_SIGNIN_REDIRECT = CAMP_ORIGIN + "/admin";
+export const CAMP_SIGNIN_SUBJECT = "Camp Rise Again — sign in to your admin account";
+export const CAMP_SIGNIN_GENERIC_MESSAGE =
+  "If this is an approved Camp Rise Again admin email, check your inbox for a secure sign-in link.";
+
+/** Supabase-generated magic links are short-lived credentials; reject all non-Camp destinations. */
+export function validCampSigninLink(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 4096) return false;
+  try {
+    const url = new URL(value);
+    return url.origin === SUPABASE_AUTH_ORIGIN &&
+      url.pathname === "/auth/v1/verify" &&
+      url.searchParams.get("type") === "magiclink" &&
+      !!url.searchParams.get("token") &&
+      url.searchParams.get("redirect_to") === CAMP_SIGNIN_REDIRECT;
+  } catch { return false; }
+}
+
+export function campSigninEmail(link: string) {
+  if (!validCampSigninLink(link)) throw new Error("Invalid Camp Rise Again sign-in link.");
+  return {
+    subject: CAMP_SIGNIN_SUBJECT,
+    text: [
+      "Camp Rise Again — Admin Sign-In",
+      "",
+      "Use this secure, single-use link to sign in to your Camp Rise Again admin account:",
+      link,
+      "",
+      "If you didn't request this email, ignore it.",
+      "",
+      "This is an automated email from Camp Rise Again Support.",
+      "This inbox is not monitored, and replies will not receive a response.",
+      "If you need assistance, visit https://campriseagain.org for contact information.",
+      "",
+      "Thank you,",
+      "Camp Rise Again Support",
+    ].join("\n"),
+    html: [
+      '<!doctype html><html lang="en"><body style="font-family:Arial,Helvetica,sans-serif;line-height:1.6;color:#14372d;">',
+      '<h2>Camp Rise Again — Admin Sign-In</h2>',
+      '<p>Use the secure, single-use link below to sign in to Camp Rise Again Admin.</p>',
+      `<p><a href="${escapeHtmlAttribute(link)}" style="color:#11664e;font-weight:700;text-decoration:underline;">Sign In to Camp Rise Again</a></p>`,
+      "<p>If you didn't request this email, ignore it.</p>",
+      '<p>This is an automated email from Camp Rise Again Support.<br>',
+      'This inbox is not monitored, and replies will not receive a response.<br>',
+      'If you need assistance, visit <a href="https://campriseagain.org">campriseagain.org</a>.</p>',
+      '<p>Thank you,<br>Camp Rise Again Support</p>',
+      '</body></html>',
+    ].join(""),
+  };
+}
