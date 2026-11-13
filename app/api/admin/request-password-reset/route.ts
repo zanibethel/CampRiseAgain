@@ -2,8 +2,8 @@ import { createHmac } from "node:crypto";
 import { Resend } from "resend";
 import { campBridge, CampBridgeError } from "@/lib/camp-supabase-bridge";
 import {
-  CAMP_AUTH_FROM, CAMP_RECOVERY_GENERIC_MESSAGE, CAMP_RECOVERY_REDIRECT,
-  campPasswordRecoveryEmail,
+  CAMP_AUTH_FROM, CAMP_RECOVERY_GENERIC_MESSAGE,
+  campPasswordRecoveryEmail, campAdminInvitationEmail,
 } from "@/lib/camp-auth-email";
 
 export const runtime = "nodejs";
@@ -68,11 +68,17 @@ export async function POST(request: Request) {
       .update("camp-auth-reset:ip:"+ip).digest("hex");
     const emailFingerprint=createHmac("sha256",secret)
       .update("camp-auth-reset:email:"+email).digest("hex");
-    const {actionLink}=await campBridge<{actionLink:string}>(
-      "generate_camp_recovery_link",
-      {email,ipFingerprint,emailFingerprint},
-    );
-    const {subject,text,html}=campPasswordRecoveryEmail(actionLink);
+    const {actionLink,linkType}=await campBridge<{
+      actionLink:string;linkType:"recovery"|"invite";
+    }>("generate_camp_recovery_link", {email,ipFingerprint,emailFingerprint});
+    // The protected Edge bridge decides whether this approved email has
+    // an existing Auth account. Reject unexpected actions instead of
+    // delivering any unrecognized Supabase link or redirect.
+    const {subject,text,html}=linkType==="invite"
+      ? campAdminInvitationEmail(actionLink)
+      : linkType==="recovery"
+        ? campPasswordRecoveryEmail(actionLink)
+        : (()=>{ throw new Error("Unexpected admin link type"); })();
     const {error:sendError}=await new Resend(resendKey).emails.send({
       from:CAMP_AUTH_FROM,to:[email],subject,text,html,
     });
