@@ -10,12 +10,13 @@ import EmailForwardingAdmin from "@/components/EmailForwardingAdmin";
 import AdminManagement from "@/components/AdminManagement";
 import {campAdminAllowed} from "@/lib/camp-admin-access";
 import SubmissionsAdmin from "@/components/SubmissionsAdmin";
+import CampCRMAdmin from "@/components/CampCRMAdmin";
 import FAQAdmin from "@/components/FAQAdmin";
 import PastCampsAdmin from "@/components/PastCampsAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 
-type AdminSection = "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "admins" | "submissions" | "faq" | "past-camps";
+type AdminSection = "crm" | "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "admins" | "submissions" | "faq" | "past-camps";
 
 type ResourceItem = {
   id: number;
@@ -372,6 +373,7 @@ export default function AdminPage() {
     { id: "email", label: "Email Forwarding", description: "Gmail forwarding recipients and reply signatures" },
     { id: "admins", label: "Admin Management", description: "Invite teammates, check access, and resend or remove accounts" },
     { id: "submissions", label: "Form Submissions", description: "Review camper, volunteer and contact forms privately" },
+    { id: "crm", label: "Contacts & Announcements", description: "CRM, newsletters and opt-in subscribers" },
     { id: "home", label: "Home Page", description: "Sections, logo, copy, and display order" },
     { id: "memorial", label: "Michael’s Photos", description: "Upload, arrange, and caption his story photos" },
     { id: "resources", label: "Resources Page", description: "Support links and display order" },
@@ -393,6 +395,7 @@ export default function AdminPage() {
       {activeSection === "email" && <EmailForwardingAdmin />}
       {activeSection === "admins" && <AdminManagement />}
       {activeSection === "submissions" && <SubmissionsAdmin />}
+      {activeSection === "crm" && <CampCRMAdmin />}
       {activeSection === "faq" && <FAQAdmin />}
       {activeSection === "past-camps" && <PastCampsAdmin />}
       {activeSection === "home" && <HomeAdmin />}

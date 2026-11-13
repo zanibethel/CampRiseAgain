@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - feat/camp-email-forwarding-reply-relay
+      - "feat/camp-*"
 
 permissions:
   contents: read
