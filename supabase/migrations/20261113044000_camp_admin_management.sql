@@ -128,3 +128,14 @@ begin
   if touched <> 18 then raise exception 'Expected 18 policies, updated %',touched; end if;
 end
 $camp_dynamic_admin$;
+
+-- Public visitors must never be required to execute the private admin
+-- predicate. Keep the public-visible rows in the public policy, and grant
+-- private hidden-row visibility via a separate authenticated-only policy.
+alter policy "camp team public read"
+on public.camp_rise_again_team_members
+using (is_visible = true);
+create policy "camp team authenticated admin read hidden"
+on public.camp_rise_again_team_members
+for select to authenticated
+using ((select private.camp_rise_again_is_admin()));
