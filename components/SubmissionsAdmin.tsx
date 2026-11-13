@@ -188,15 +188,16 @@ export default function SubmissionsAdmin() {
               <dt style={{fontSize:13,fontWeight:700,opacity:.75}}>{labels[key]}</dt>
               <dd style={{margin:0,whiteSpace:"pre-wrap"}}>{display(value)}</dd>
             </div>)}
-          {detail.extra_answers && typeof detail.extra_answers === "object" &&
-            !Array.isArray(detail.extra_answers) &&
-            Object.entries(detail.extra_answers as Record<string,unknown>).map(([key,value])=>
-              <div key={"extra-"+key} style={{overflowWrap:"anywhere"}}>
-                <dt style={{fontSize:13,fontWeight:700,opacity:.75}}>
-                  {"Additional: "+key.replace(/_/g," ")}
-                </dt>
-                <dd style={{margin:0,whiteSpace:"pre-wrap"}}>{display(value)}</dd>
-              </div>)}
+          {detail.extra_answers !== null && typeof detail.extra_answers === "object" &&
+            !Array.isArray(detail.extra_answers)
+              ? Object.entries(detail.extra_answers as Record<string,unknown>).map(([key,value])=>
+                  <div key={"extra-"+key} style={{overflowWrap:"anywhere"}}>
+                    <dt style={{fontSize:13,fontWeight:700,opacity:.75}}>
+                      {"Additional: "+key.replace(/_/g," ")}
+                    </dt>
+                    <dd style={{margin:0,whiteSpace:"pre-wrap"}}>{display(value)}</dd>
+                  </div>)
+              : null}
         </dl>}
       </div>}
       {status && <p className="status" role="status" aria-live="polite">{status}</p>}
