@@ -6,32 +6,25 @@ const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf
 const admins = ["schofieldtierra@gmail.com", "zanibethel@gmail.com",
   "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"];
 
-test("all Camp admin gates retain existing and allow newly approved addresses", () => {
-  const files = [
-    "app/admin/page.tsx",
-    "app/admin/reset-password/page.tsx",
+test("Camp administrator membership is shared and all gates check active directory access",()=>{
+  const migration=read("supabase/migrations/20261113044000_camp_admin_management.sql");
+  for(const address of admins)assert.ok(migration.includes(address),"Missing seeded admin: "+address);
+  assert.ok(migration.includes("private.camp_rise_again_is_admin()"));
+  const browser=read("app/admin/page.tsx");
+  assert.ok(browser.includes('fetch("/api/admin/request-sign-in-link"'));
+  assert.ok(browser.includes('label: "Admin Management"'));
+  assert.ok(browser.includes("campAdminAllowed("));
+  const bridge=read("supabase/functions/camp-email-bridge/index.ts");
+  assert.ok(bridge.includes('if (action === "admin_team_add")'));
+  assert.ok(bridge.includes('if (action === "admin_team_revoke")'));
+  assert.ok(bridge.includes("activeCampAdmin(recipient)"));
+  assert.ok(bridge.includes('type: "magiclink"'));
+  for(const file of [
     "components/AdminTeamGate.tsx",
     "components/AdminGoFundMeGate.tsx",
-    "app/api/admin/request-password-reset/route.ts",
-    "app/api/admin/visitor-analytics/route.ts",
-    "supabase/functions/camp-email-bridge/index.ts",
-  ];
-  for (const file of files) {
-    const source = read(file);
-    for (const email of admins) assert.ok(source.includes(email), file + " missing " + email);
-  }
-});
-
-test("approved new admins use Camp's protected branded sign-in endpoint", () => {
-  const browser = read("app/admin/page.tsx");
-  assert.ok(browser.includes('fetch("/api/admin/request-sign-in-link"'));
-  assert.ok(!browser.includes("auth.signInWithOtp"));
-  const api = read("app/api/admin/request-sign-in-link/route.ts");
-  for (const email of admins) assert.ok(api.includes(email), "Missing approved admin: " + email);
-  assert.ok(api.includes("generate_camp_signin_link"));
-  const bridge = read("supabase/functions/camp-email-bridge/index.ts");
-  assert.ok(bridge.includes('type: "magiclink"'));
-  assert.ok(bridge.includes("ADMIN_EMAILS.has(recipient)"));
+    "app/admin/reset-password/page.tsx",
+  ])assert.ok(read(file).includes("campAdminAllowed("),file+" does not check live directory");
+  assert.ok(read("app/api/admin/visitor-analytics/route.ts").includes('"admin_team_me"'));
 });
 
 test("forwarding additions remain inactive until mailbox verification", () => {

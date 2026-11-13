@@ -7,10 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CAMP_HOST = "campriseagain.org";
-const ADMINS = new Set([
-  "schofieldtierra@gmail.com", "zanibethel@gmail.com",
-  "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com",
-]);
+
 
 function json(payload: unknown, status = 200) {
   return Response.json(payload, {
@@ -52,7 +49,7 @@ export async function POST(request: Request) {
   }
   const email = supplied.trim().toLowerCase();
   const confirmation = { ok: true, message: CAMP_SIGNIN_GENERIC_MESSAGE };
-  if (!ADMINS.has(email)) return json(confirmation);
+
 
   const secret = process.env.CAMP_SUPABASE_BRIDGE_TOKEN;
   const resendKey = process.env.CAMP_RESEND_API_KEY || process.env.RESEND_API_KEY;
@@ -67,9 +64,11 @@ export async function POST(request: Request) {
       .update("camp-auth-signin:ip:" + ip).digest("hex");
     const emailFingerprint = createHmac("sha256", secret)
       .update("camp-auth-signin:email:" + email).digest("hex");
-    const { actionLink } = await campBridge<{ actionLink: string }>(
+    const { actionLink, approved } = await campBridge<{ actionLink?: string; approved: boolean }>(
       "generate_camp_signin_link", { email, ipFingerprint, emailFingerprint },
     );
+    if (!approved) return json(confirmation);
+    if (!actionLink) throw new Error("Missing approved sign-in link");
     const { subject, text, html } = campSigninEmail(actionLink);
     const { error: sendError } = await new Resend(resendKey).emails.send({
       from: CAMP_AUTH_FROM, to: [email], subject, text, html,

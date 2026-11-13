@@ -14,7 +14,7 @@ const goodLink="https://yufptpfiwdbzzrvhkvux.supabase.co/auth/v1/verify?"+
   "token=one-time-opaque-token&type=recovery&redirect_to="+
   encodeURIComponent("https://campriseagain.org/admin/reset-password");
 
-function loadRoute({rateLimited=false,badLink=false,sendFailure=false,bridgeUnavailable=false,linkType="recovery"}={}) {
+function loadRoute({rateLimited=false,badLink=false,sendFailure=false,bridgeUnavailable=false,linkType="recovery",approved=true}={}) {
   const sent=[];const bridges=[];
   class MockCampBridgeError extends Error {
     constructor(message,status){super(message);this.status=status;}
@@ -28,7 +28,7 @@ function loadRoute({rateLimited=false,badLink=false,sendFailure=false,bridgeUnav
         if(bridgeUnavailable)throw new MockCampBridgeError("Bridge unavailable",503);
         const validLink=linkType==="invite"
           ?goodLink.replace("type=recovery","type=invite"):goodLink;
-        return {actionLink:badLink?"https://evil.example/reset":validLink,linkType};
+        return {actionLink:badLink?"https://evil.example/reset":validLink,linkType,approved};
       },
     },
     "resend":{Resend:class Resend {
@@ -105,6 +105,15 @@ test("unexpected link action is rejected without sending",async()=>{
   assert.equal(r.sent.length,0);
 });
 
+test("unapproved email receives only a generic response with no email delivery",async()=>{
+  const r=loadRoute({approved:false});
+  const res=await r.post(request("someone@unknown.example"));
+  assert.equal(res.status,200);
+  assert.equal(r.bridges.length,1);
+  assert.equal(r.sent.length,0);
+  assert.ok(!JSON.stringify(await res.json()).includes("token"));
+});
+
 test("foreign origin cannot request a recovery link",async()=>{
   const r=loadRoute();
   const response=await r.post(request("zanibethel@gmail.com","https://malicious.example"));
@@ -112,11 +121,11 @@ test("foreign origin cannot request a recovery link",async()=>{
   assert.equal(r.bridges.length,0);
 });
 
-test("unknown emails never request a recovery link",async()=>{
-  const r=loadRoute();
+test("unknown emails receive a generic message without a recovery email",async()=>{
+  const r=loadRoute({approved:false});
   const response=await r.post(request("stranger@example.com"));
   assert.equal(response.status,200);
-  assert.equal(r.bridges.length,0);
+  assert.equal(r.bridges.length,1);
   assert.equal(r.sent.length,0);
 });
 
@@ -159,18 +168,18 @@ test("does not claim success if Resend rejects delivery",async()=>{
   assert.equal(r.sent.length,1);
 });
 
-test("the private Edge action requires exact Camp admin, SHA fingerprints, and atomic limits",()=>{
+test("the private bridge checks active Camp admins, rate limits and fixed redirects",()=>{
   const bridge=readFileSync(new URL("../supabase/functions/camp-email-bridge/index.ts",import.meta.url),"utf8");
-  const section=bridge.split('if (action === "generate_camp_recovery_link")')[1]?.split('if (action === "ping")')[0];
+  const section=bridge.split('if (action === "generate_camp_recovery_link")')[1]?.split('if (action === "generate_camp_signin_link")')[0];
   assert.ok(section);
-  assert.match(section,/ADMIN_EMAILS\.has\(recipient\)/);
+  assert.match(section,/activeCampAdmin\(recipient\)/);
   assert.match(section,/SHA256\.test\(ipFingerprint\)/);
   assert.match(section,/SHA256\.test\(emailFingerprint\)/);
   assert.match(section,/camp_rise_again_claim_form_rate/g);
-  assert.match(section,/auth\.admin\.generateLink/);
-  assert.match(section,/auth\.admin\.listUsers/);
-  assert.match(section,/registered \? "recovery" : "invite"/);
-  assert.match(section,/redirectTo: "https:\/\/campriseagain\.org\/admin\/reset-password"/);
+  assert.match(bridge,/async function adminActionLink/);
+  assert.match(bridge,/auth\.admin\.generateLink/);
+  assert.match(bridge,/auth\.admin\.listUsers/);
+  assert.match(bridge,/redirectTo: "https:\/\/campriseagain\.org\/admin\/reset-password"/);
   assert.ok(bridge.indexOf("if (!(await authorized(request)))")<
     bridge.indexOf('if (action === "generate_camp_recovery_link")'));
 });

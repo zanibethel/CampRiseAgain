@@ -4,8 +4,9 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { campPasswordUpdateErrorMessage } from "@/lib/camp-auth-password-errors";
+import {campAdminAllowed} from "@/lib/camp-admin-access";
 
-const ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com", "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"]);
+
 
 export default function CreateAdminPassword() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -50,7 +51,9 @@ export default function CreateAdminPassword() {
           setStatus("Open your latest password reset email link to create a password. If it expired, request another link.");
           return;
         }
-        if (!ADMINS.has(email)) {
+        const {data:sessionData}=await supabase.auth.getSession();
+        if (!sessionData.session?.access_token ||
+            !(await campAdminAllowed(sessionData.session.access_token))) {
           setStatus("This account is not authorized to manage Camp Rise Again.");
           return;
         }
@@ -86,7 +89,10 @@ export default function CreateAdminPassword() {
     setStatus("");
     try {
       const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || userData.user?.email?.toLowerCase() !== verifiedEmail || !ADMINS.has(verifiedEmail)) {
+      const {data:sessionData}=await supabase.auth.getSession();
+      if (userError || userData.user?.email?.toLowerCase() !== verifiedEmail ||
+          !sessionData.session?.access_token ||
+          !(await campAdminAllowed(sessionData.session.access_token))) {
         setStatus("Your recovery session is no longer valid. Request a new password reset link.");
         return;
       }
