@@ -8,7 +8,7 @@ type Contact={
   tags:string[];notes:string;last_engaged_at:string|null;mailing_status:string;
 };
 type Campaign={
-  id:string;kind:"announcement"|"newsletter";subject:string;body:string;
+  id:string;kind:"announcement"|"newsletter";purpose:"community"|"commercial";subject:string;body:string;
   status:"draft"|"sending"|"sent";created_at:string;completed_at:string|null;
 };
 type ContactsResponse={contacts:Contact[];total:number;truncated:boolean};
@@ -55,8 +55,8 @@ export default function CampCRMAdmin() {
   const [status,setStatus]=useState("");
   const [busy,setBusy]=useState(false);
   const [newContact,setNewContact]=useState({display_name:"",email:"",phone:""});
-  const [draft,setDraft]=useState<{id?:string;kind:"announcement"|"newsletter";subject:string;body:string}>({
-    kind:"announcement",subject:"",body:"",
+  const [draft,setDraft]=useState<{id?:string;kind:"announcement"|"newsletter";purpose:"community"|"commercial";subject:string;body:string}>({
+    kind:"announcement",purpose:"community",subject:"",body:"",
   });
 
   const loadContacts=useCallback(async()=>{
@@ -88,7 +88,8 @@ export default function CampCRMAdmin() {
   },[contacts,search]);
   const mailingHasChanges=mailingAddress.trim()!==mailingSettings.postal_address ||
     mailingConfirmed!==mailingSettings.address_confirmed;
-  const canSend=mailingReady && !mailingHasChanges;
+  const canSend=(purpose:"community"|"commercial")=>
+    purpose==="community" || (mailingReady && !mailingHasChanges);
   async function saveMailingSettings(event:FormEvent<HTMLFormElement>){
     event.preventDefault();setBusy(true);setStatus("");
     try{
@@ -130,12 +131,16 @@ export default function CampCRMAdmin() {
   }
   async function beginCampaign(id:string){
     const item=campaigns.find(c=>c.id===id);
-    if(!item || !canSend)return;
-    if(!window.confirm("Send “"+item.subject+"” to up to "+subscribers+
+    if(!item || !canSend(item.purpose))return;
+    const notice=item.purpose==="community"?
+      "Confirm that this is a noncommercial community message, not an advertisement for commercial goods or services. ":
+      "This is a commercial promotion, and the verified postal address will appear in its footer. ";
+    if(!window.confirm(notice+"Send “"+item.subject+"” to up to "+subscribers+
       " confirmed subscribers? This cannot be undone once sending begins."))return;
     setBusy(true);setStatus("Preparing subscriber delivery queue…");
     try{
-      await adminCall("campaigns",{action:"begin_campaign",id});
+      await adminCall("campaigns",{action:"begin_campaign",id,
+        noncommercial_reviewed:item.purpose==="community"});
       await loadCampaigns();setStatus("Queue prepared. Sending confirmed subscribers…");
       await continueCampaign(id);
     }catch(error){setStatus(error instanceof Error?error.message:"Campaign could not start.");}
@@ -225,10 +230,10 @@ export default function CampCRMAdmin() {
       </div>
       <form className="card" onSubmit={saveMailingSettings} style={{marginBottom:18}}>
         <h3>Organization Mailing Details</h3>
-        <p className="section-copy">Enter these details when they become available. The address will appear in newsletter and announcement footers. Campaigns can be drafted now, but sending remains unavailable until the mailing address is confirmed.</p>
+        <p className="section-copy">This optional address will appear in all newsletter and announcement footers once saved. Noncommercial camp updates may be sent without it; commercial promotions require a confirmed postal address.</p>
         <p className="section-copy" role="status" style={{fontWeight:700}}>
-          {mailingReady?"Mailing address verified by admin — ready for email footers":
-            "Setup required — mailing address not confirmed"}
+          {mailingReady?"Mailing address confirmed — included in email footers":
+            "Mailing address not yet provided — noncommercial updates are still available"}
         </p>
         <div className="field">
           <label htmlFor="camp-mailing-address">Organization physical mailing address or PO Box</label>
@@ -252,35 +257,42 @@ export default function CampCRMAdmin() {
           Last saved {new Date(mailingSettings.updated_at).toLocaleString()}
           {mailingSettings.updated_by?" by "+mailingSettings.updated_by:""}.
         </p>}
-        {!mailingReady&&<p className="section-copy">You can save drafts and collect subscriptions while this is pending. No announcement or newsletter can be sent until the details are saved and confirmed.</p>}
+        {!mailingReady&&<p className="section-copy">Noncommercial newsletters and camp announcements can be sent without an address. Save the actual postal address before using the commercial promotions option.</p>}
       </form>
       <form className="card" onSubmit={saveDraft}>
         <h3>{draft.id?"Edit draft":"Create announcement or newsletter"}</h3>
         <div className="field"><label>Type</label><select value={draft.kind} onChange={e=>setDraft({...draft,kind:e.target.value as "announcement"|"newsletter"})}>
           <option value="announcement">Announcement</option><option value="newsletter">Newsletter</option>
         </select></div>
+        <div className="field"><label>Message purpose</label>
+          <select value={draft.purpose} onChange={e=>setDraft({...draft,purpose:e.target.value as "community"|"commercial"})}>
+            <option value="community">Noncommercial community update / camp newsletter</option>
+            <option value="commercial">Commercial promotion of products or services</option>
+          </select>
+          <p className="section-copy">Choose by the actual primary purpose of the message. Noncommercial updates may include camp dates, volunteering, and mental health resources. If you promote paid products or commercial services, choose commercial; a confirmed postal address is then required.</p>
+        </div>
         <div className="field"><label>Email subject</label>
           <input required minLength={3} maxLength={150} value={draft.subject} onChange={e=>setDraft({...draft,subject:e.target.value})}/></div>
         <div className="field"><label>Message (plain text)</label>
           <textarea required minLength={10} maxLength={12000} rows={8} value={draft.body} onChange={e=>setDraft({...draft,body:e.target.value})}/></div>
         <div className="actions"><button disabled={busy} className="btn btn-primary">Save Draft</button>
-          <button type="button" className="btn btn-secondary" onClick={()=>setDraft({kind:"announcement",subject:"",body:""})}>New Draft</button></div>
+          <button type="button" className="btn btn-secondary" onClick={()=>setDraft({kind:"announcement",purpose:"community",subject:"",body:""})}>New Draft</button></div>
         <p className="section-copy">Preview the content before sending. The footer and personalized unsubscribe link are added automatically.</p>
         {draft.body&&<div style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",borderTop:"1px solid #ddd",marginTop:14,paddingTop:14}}>
           <strong>{draft.subject||"Subject preview"}</strong><p>{draft.body}</p>
-          <small>Camp Rise Again · Subscription management link added per recipient</small>
+          <small>Camp Rise Again · Subscription management link added per recipient · {draft.purpose==="commercial"?"Commercial message — mailing address required":"Community update — mailing address optional"}</small>
         </div>}
       </form>
       <h3 style={{marginTop:24}}>Campaigns</h3>
       <div style={{display:"grid",gap:10}}>
         {campaigns.map(item=><div className="card" key={item.id}>
-          <strong>{item.subject}</strong><div style={{fontSize:13,margin:"5px 0"}}>{stageName(item.kind)} · {stageName(item.status)} · {new Date(item.created_at).toLocaleDateString()}</div>
+          <strong>{item.subject}</strong><div style={{fontSize:13,margin:"5px 0"}}>{stageName(item.kind)} · {item.purpose==="commercial"?"Commercial":"Community"} · {stageName(item.status)} · {new Date(item.created_at).toLocaleDateString()}</div>
           <div className="actions">
             {item.status==="draft"&&<>
-              <button type="button" className="btn btn-secondary" onClick={()=>setDraft({id:item.id,kind:item.kind,subject:item.subject,body:item.body})}>Edit</button>
-              <button type="button" disabled={busy||subscribers===0||!canSend} className="btn btn-primary" onClick={()=>void beginCampaign(item.id)}>Confirm &amp; Send</button>
+              <button type="button" className="btn btn-secondary" onClick={()=>setDraft({id:item.id,kind:item.kind,purpose:item.purpose,subject:item.subject,body:item.body})}>Edit</button>
+              <button type="button" disabled={busy||subscribers===0||!canSend(item.purpose)} className="btn btn-primary" onClick={()=>void beginCampaign(item.id)}>Confirm &amp; Send</button>
             </>}
-            {item.status==="sending"&&<button type="button" className="btn btn-primary" disabled={busy||!canSend} onClick={()=>void continueCampaign(item.id)}>Resume Sending</button>}
+            {item.status==="sending"&&<button type="button" className="btn btn-primary" disabled={busy||!canSend(item.purpose)} onClick={()=>void continueCampaign(item.id)}>Resume Sending</button>}
           </div>
         </div>)}
         {!campaigns.length&&<p className="section-copy">No announcements yet. Save the first draft above.</p>}
