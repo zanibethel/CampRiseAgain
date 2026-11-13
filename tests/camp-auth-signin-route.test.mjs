@@ -14,7 +14,7 @@ const goodLink = "https://yufptpfiwdbzzrvhkvux.supabase.co/auth/v1/verify?" +
   "token=one-time-test-token&type=magiclink&redirect_to=" +
   encodeURIComponent("https://campriseagain.org/admin");
 
-function loadRoute({ rateLimited = false, badLink = false, sendFailure = false, bridgeUnavailable = false } = {}) {
+function loadRoute({ rateLimited = false, badLink = false, sendFailure = false, bridgeUnavailable = false, approved = true } = {}) {
   const sent = []; const bridges = [];
   class MockCampBridgeError extends Error {
     constructor(message, status) { super(message); this.status = status; }
@@ -26,7 +26,7 @@ function loadRoute({ rateLimited = false, badLink = false, sendFailure = false, 
         bridges.push({ action, params });
         if (rateLimited) throw new MockCampBridgeError("Too many requests", 429);
         if (bridgeUnavailable) throw new MockCampBridgeError("Service unavailable", 503);
-        return { actionLink: badLink ? "https://evil.example/auth/v1/verify?token=x&type=magiclink" : goodLink };
+        return { approved, actionLink: badLink ? "https://evil.example/auth/v1/verify?token=x&type=magiclink" : goodLink };
       },
     },
     "resend": { Resend: class {
@@ -101,11 +101,11 @@ test("both existing and newly added Camp admins are allowed", async () => {
 });
 
 test("non-admin email produces a generic response without generating links", async () => {
-  const r = loadRoute();
+  const r = loadRoute({approved:false});
   const response = await r.post(request("someone@example.org"));
   assert.equal(response.status, 200);
   assert.equal(r.sent.length, 0);
-  assert.equal(r.bridges.length, 0);
+  assert.equal(r.bridges.length, 1);
   assert.equal((await response.json()).ok, true);
 });
 
@@ -149,7 +149,7 @@ test("private bridge enforces admin allowlist, rate limits and fixed Camp redire
   const bridge = readFileSync(new URL("../supabase/functions/camp-email-bridge/index.ts", import.meta.url), "utf8");
   const section = bridge.split('if (action === "generate_camp_signin_link")')[1]?.split('if (action === "ping")')[0];
   assert.ok(section);
-  assert.match(section, /ADMIN_EMAILS\.has\(recipient\)/);
+  assert.match(section, /activeCampAdmin\(recipient\)/);
   assert.match(section, /SHA256\.test\(ipFingerprint\)/);
   assert.match(section, /SHA256\.test\(emailFingerprint\)/);
   assert.match(section, /camp_rise_again_claim_form_rate/g);
