@@ -961,7 +961,7 @@ Deno.serve(async (request: Request) => {
       const id=str(params.id,64),kind=str(params.kind,20),subject=str(params.subject,150),
         body=str(params.body,12000);
       if(!["announcement","newsletter"].includes(kind) || subject.length<3 ||
-        body.length<10 || body.length>12000)return respond({error:"Complete the announcement"},400);
+        body.length<10 || typeof params.body!=="string" || params.body.length>12000)return respond({error:"Complete the announcement"},400);
       if(id){
         if(!UUID.test(id))return respond({error:"Invalid campaign"},400);
         const {data,error}=await db.from("camp_rise_again_campaigns")
