@@ -663,6 +663,22 @@ Deno.serve(async (request: Request) => {
         if ((count || 0)>1000) truncated = true;
         for (const row of data || []) submissions.push({...row,kind:k});
       }
+      // Join only admin-curated CRM metadata. Do not export intake free-text.
+      const addresses=[...new Set(submissions.map(x=>email(x.email)).filter(Boolean))];
+      const crmByEmail=new Map<string,{tags:string[];notes:string}>();
+      for(let start=0;start<addresses.length;start+=100){
+        const {data,error}=await db.from("camp_rise_again_crm_contacts")
+          .select("email,tags,notes").in("email",addresses.slice(start,start+100));
+        if(error)return respond({error:"Unable to export CRM details"},503);
+        for(const contact of data||[])crmByEmail.set(contact.email,{
+          tags:contact.tags||[],notes:contact.notes||"",
+        });
+      }
+      for(const record of submissions){
+        const crm=crmByEmail.get(email(record.email));
+        record.contact_tags=crm?.tags||[];
+        record.contact_notes=crm?.notes||"";
+      }
       submissions.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
       return respond({submissions,truncated});
     }
@@ -1044,6 +1060,22 @@ Deno.serve(async (request: Request) => {
         .eq("email",addr);
       return error?respond({error:"Unable to unsubscribe"},503):respond({ok:true});
     }
+    if (action === "admin_crm_export") {
+      // Only approved admins reach this action. Export at most 5,000 contacts
+      // with an explicit truncated flag instead of silently omitting records.
+      const contacts:Json[]=[];
+      let truncated=false;
+      for(let start=0;start<=5000;start+=1000){
+        const {data,error}=await db.from("camp_rise_again_crm_contacts")
+          .select("email,display_name,phone,stage,tags,notes,source_kinds,last_engaged_at")
+          .order("email",{ascending:true}).range(start,start+999);
+        if(error)return respond({error:"Unable to export contacts"},503);
+        if(start===5000){truncated=(data||[]).length>0;break;}
+        contacts.push(...(data||[]));
+        if((data||[]).length<1000)break;
+      }
+      return respond({contacts,truncated});
+    }
     if (action === "admin_crm_list") {
       const {data,error}=await db.from("camp_rise_again_crm_contacts")
         .select("email,display_name,phone,source_kinds,stage,tags,notes,last_engaged_at,created_at,updated_at")
@@ -1068,9 +1100,16 @@ Deno.serve(async (request: Request) => {
     }
     if (action === "admin_crm_add") {
       const addr=email(params.email), name=str(params.display_name,160),phone=str(params.phone,40);
-      if(!addr || !name)return respond({error:"Name and valid email required"},400);
+      const notes=typeof params.notes==="string"?params.notes.trim():"";
+      const tags=params.tags??[];
+      if(!addr || !name || (params.notes!==undefined &&
+         (typeof params.notes!=="string" || params.notes.length>1000)) ||
+        !Array.isArray(tags) || tags.length>2 ||
+        tags.some(x=>x!=="camper" && x!=="volunteer"))
+        return respond({error:"Enter a name, valid email, and valid Camper/Volunteer categories and notes."},400);
       const {data,error}=await db.from("camp_rise_again_crm_contacts")
-        .insert({email:addr,display_name:name,phone,source_kinds:["manual"],stage:"new"})
+        .insert({email:addr,display_name:name,phone,source_kinds:["manual"],stage:"new",
+          tags:[...new Set(tags)],notes})
         .select("email").single();
       return error?respond({error:error.code==="23505"?"Contact already exists":"Unable to add contact"},
         error.code==="23505"?409:503):respond({contact:data});

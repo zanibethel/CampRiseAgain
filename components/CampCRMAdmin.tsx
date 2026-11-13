@@ -54,7 +54,7 @@ export default function CampCRMAdmin() {
   const [search,setSearch]=useState("");
   const [status,setStatus]=useState("");
   const [busy,setBusy]=useState(false);
-  const [newContact,setNewContact]=useState({display_name:"",email:"",phone:""});
+  const [newContact,setNewContact]=useState<{display_name:string;email:string;phone:string;tags:string[];notes:string}>({display_name:"",email:"",phone:"",tags:[],notes:""});
   const [draft,setDraft]=useState<{id?:string;kind:"announcement"|"newsletter";purpose:"community"|"commercial";subject:string;body:string}>({
     kind:"announcement",purpose:"community",subject:"",body:"",
   });
@@ -106,9 +106,32 @@ export default function CampCRMAdmin() {
     event.preventDefault();setBusy(true);setStatus("");
     try{
       await adminCall("contacts",{action:"add_contact",...newContact});
-      await loadContacts();setNewContact({display_name:"",email:"",phone:""});
+      await loadContacts();setNewContact({display_name:"",email:"",phone:"",tags:[],notes:""});
       setStatus("Contact added.");
     }catch(error){setStatus(error instanceof Error?error.message:"Unable to add contact.");}
+    finally{setBusy(false);}
+  }
+  async function exportContacts(){
+    if(busy)return;
+    setBusy(true);setStatus("");
+    try{
+      const {data,error}=await getSupabaseBrowserClient().auth.getSession();
+      if(error||!data.session?.access_token)throw new Error("Sign in again to export contacts.");
+      const response=await fetch("/api/admin/crm/export",{
+        headers:{Authorization:"Bearer "+data.session.access_token},cache:"no-store",
+      });
+      if(!response.ok)throw new Error("Could not export contacts.");
+      const truncated=response.headers.get("X-Export-Truncated")==="true";
+      const blob=await response.blob();
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;a.download="camp-rise-again-contacts.csv";
+      document.body.appendChild(a);a.click();a.remove();
+      window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+      setStatus(truncated
+        ?"Contacts CSV downloaded; export limit reached, so some contacts were not included."
+        :"Contacts CSV downloaded. Keep it private because it includes internal notes.");
+    }catch(error){setStatus(error instanceof Error?error.message:"Export unavailable.");}
     finally{setBusy(false);}
   }
   async function saveContact(event:FormEvent<HTMLFormElement>){
@@ -187,9 +210,36 @@ export default function CampCRMAdmin() {
             <div className="field"><label>Email</label><input required type="email" value={newContact.email} onChange={e=>setNewContact({...newContact,email:e.target.value})}/></div>
             <div className="field"><label>Phone (optional)</label><input maxLength={40} value={newContact.phone} onChange={e=>setNewContact({...newContact,phone:e.target.value})}/></div>
           </div>
+          <fieldset style={{border:0,padding:0,margin:"16px 0"}}>
+            <legend style={{fontWeight:700,marginBottom:10}}>Contact type (select both if applicable)</legend>
+            <div style={{display:"flex",flexWrap:"wrap",gap:22}}>
+              {(["camper","volunteer"] as const).map(role=>
+                <label key={role} className="checks" style={{display:"flex",alignItems:"center",gap:8}}>
+                  <input type="checkbox" checked={newContact.tags.includes(role)}
+                    onChange={event=>setNewContact({...newContact,tags:event.target.checked
+                      ? [...newContact.tags.filter(t=>t!==role),role]
+                      : newContact.tags.filter(t=>t!==role)})}/>
+                  {role==="camper"?"Camper":"Volunteer"}
+                </label>
+              )}
+            </div>
+          </fieldset>
+          <div className="field"><label htmlFor="camp-contact-new-notes">Internal notes (private)</label>
+            <textarea id="camp-contact-new-notes" rows={3} maxLength={1000}
+              placeholder="For example: Contacted through Instagram on Nov 12; follow up about volunteering"
+              value={newContact.notes}
+              onChange={event=>setNewContact({...newContact,notes:event.target.value})}/>
+            <small>Avoid personal health details. Notes will be included in admin CSV exports.</small>
+          </div>
           <button className="btn btn-secondary" disabled={busy}>+ Add Contact</button>
         </form>
         <p className="section-copy" style={{marginTop:12}}>Adding a person does not sign them up for promotional email. They must confirm their own subscription.</p>
+      </div>
+      <div className="actions" style={{margin:"16px 0"}}>
+        <button type="button" className="btn btn-secondary" disabled={busy} onClick={()=>void exportContacts()}>
+          Export Contacts CSV
+        </button>
+        <small>Private download includes contact tags and notes. Store it securely.</small>
       </div>
       <div className="field" style={{marginBottom:14}}>
         <label htmlFor="crm-search">Search contacts</label>
@@ -216,7 +266,21 @@ export default function CampCRMAdmin() {
             <input value={selected.tags.join(", ")} onChange={e=>setSelected({...selected,
               tags:e.target.value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,12)})}/></div>
         </div>
-        <div className="field"><label>Internal notes (private, non-clinical)</label>
+        <fieldset style={{border:0,padding:0,margin:"12px 0"}}>
+          <legend style={{fontWeight:700,marginBottom:8}}>Contact type</legend>
+          <div style={{display:"flex",flexWrap:"wrap",gap:22}}>
+            {(["camper","volunteer"] as const).map(role=>
+              <label key={role} className="checks" style={{display:"flex",alignItems:"center",gap:8}}>
+                <input type="checkbox" checked={selected.tags.includes(role)}
+                  onChange={event=>setSelected({...selected,tags:event.target.checked
+                    ? [...selected.tags.filter(t=>t!==role),role]
+                    : selected.tags.filter(t=>t!==role)})}/>
+                {role==="camper"?"Camper":"Volunteer"}
+              </label>
+            )}
+          </div>
+        </fieldset>
+        <div className="field"><label>Internal notes (private, non-clinical; included in CSV exports)</label>
           <textarea maxLength={1000} rows={3} value={selected.notes} onChange={e=>setSelected({...selected,notes:e.target.value})}/></div>
         <div className="actions"><button className="btn btn-primary" disabled={busy}>Save Contact</button>
           <button type="button" className="btn btn-secondary" onClick={()=>setSelected(null)}>Close</button></div>
