@@ -14,7 +14,7 @@ const goodLink="https://yufptpfiwdbzzrvhkvux.supabase.co/auth/v1/verify?"+
   "token=one-time-opaque-token&type=recovery&redirect_to="+
   encodeURIComponent("https://campriseagain.org/admin/reset-password");
 
-function loadRoute({rateLimited=false,badLink=false,sendFailure=false,bridgeUnavailable=false}={}) {
+function loadRoute({rateLimited=false,badLink=false,sendFailure=false,bridgeUnavailable=false,linkType="recovery"}={}) {
   const sent=[];const bridges=[];
   class MockCampBridgeError extends Error {
     constructor(message,status){super(message);this.status=status;}
@@ -26,7 +26,9 @@ function loadRoute({rateLimited=false,badLink=false,sendFailure=false,bridgeUnav
         bridges.push({action,params});
         if(rateLimited)throw new MockCampBridgeError("Too many requests",429);
         if(bridgeUnavailable)throw new MockCampBridgeError("Bridge unavailable",503);
-        return {actionLink:badLink?"https://evil.example/reset":goodLink};
+        const validLink=linkType==="invite"
+          ?goodLink.replace("type=recovery","type=invite"):goodLink;
+        return {actionLink:badLink?"https://evil.example/reset":validLink,linkType};
       },
     },
     "resend":{Resend:class Resend {
@@ -80,6 +82,27 @@ test("authorized request uses the private Edge bridge, delivers branding, and ne
   assert.match(r.bridges[0].params.ipFingerprint,/^[0-9a-f]{64}$/);
   assert.match(r.bridges[0].params.emailFingerprint,/^[0-9a-f]{64}$/);
   assert.notEqual(r.bridges[0].params.ipFingerprint,r.bridges[0].params.emailFingerprint);
+});
+
+test("newly approved admin receives first-time invite rather than a recovery link",async()=>{
+  const r=loadRoute({linkType:"invite"});
+  const response=await r.post(request("james.campriseagain@gmail.com"));
+  const body=await response.json();
+  assert.equal(response.status,200);
+  assert.ok(!JSON.stringify(body).includes("one-time-opaque-token"));
+  assert.equal(r.sent.length,1);
+  assert.equal(r.sent[0].to[0],"james.campriseagain@gmail.com");
+  assert.match(r.sent[0].subject,/create your admin password/i);
+  assert.ok(r.sent[0].html.includes("Create Your Admin Password</a>"));
+  assert.ok(r.sent[0].html.includes("This inbox is not monitored"));
+  assert.equal(r.bridges[0].params.email,"james.campriseagain@gmail.com");
+});
+
+test("unexpected link action is rejected without sending",async()=>{
+  const r=loadRoute({linkType:"magiclink"});
+  const response=await r.post(request());
+  assert.equal(response.status,503);
+  assert.equal(r.sent.length,0);
 });
 
 test("foreign origin cannot request a recovery link",async()=>{
@@ -145,6 +168,8 @@ test("the private Edge action requires exact Camp admin, SHA fingerprints, and a
   assert.match(section,/SHA256\.test\(emailFingerprint\)/);
   assert.match(section,/camp_rise_again_claim_form_rate/g);
   assert.match(section,/auth\.admin\.generateLink/);
+  assert.match(section,/auth\.admin\.listUsers/);
+  assert.match(section,/registered \? "recovery" : "invite"/);
   assert.match(section,/redirectTo: "https:\/\/campriseagain\.org\/admin\/reset-password"/);
   assert.ok(bridge.indexOf("if (!(await authorized(request)))")<
     bridge.indexOf('if (action === "generate_camp_recovery_link")'));

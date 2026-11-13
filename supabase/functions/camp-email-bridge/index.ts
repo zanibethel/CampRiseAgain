@@ -111,15 +111,41 @@ Deno.serve(async (request: Request) => {
       });
       if (emailError) return respond({ error: "Recovery service unavailable" }, 503);
       if (!emailAllowed) return respond({ error: "Too many requests" }, 429);
+      // Supabase password recovery requires an existing Auth account.
+      // An admin address being in the Camp allowlist (or receiving staff
+      // forwarding) does not automatically create an Auth user. For newly
+      // approved admins issue an invite link instead, which creates their
+      // Auth record and signs them in on their first verified click.
+      // Never invite an email outside ADMIN_EMAILS.
+      let registered = false;
+      let enumerationComplete = false;
+      for (let page = 1; page <= 10; page++) {
+        const { data: users, error: listError } = await db.auth.admin.listUsers({
+          page, perPage: 1000,
+        });
+        if (listError || !users) return respond({ error: "Admin onboarding unavailable" }, 503);
+        if (users.users.some(user => user.email?.toLowerCase() === recipient)) {
+          registered = true;
+          enumerationComplete = true;
+          break;
+        }
+        if (users.users.length < 1000) {
+          enumerationComplete = true;
+          break;
+        }
+      }
+      // Do not treat truncated pagination as a nonexistent user.
+      if (!enumerationComplete) return respond({ error: "Admin onboarding unavailable" }, 503);
+      const linkType = registered ? "recovery" : "invite";
       const { data, error } = await db.auth.admin.generateLink({
-        type: "recovery",
+        type: linkType,
         email: recipient,
         options: { redirectTo: "https://campriseagain.org/admin/reset-password" },
       });
       if (error || typeof data?.properties?.action_link !== "string") {
-        return respond({ error: "Unable to generate recovery link" }, 503);
+        return respond({ error: "Unable to generate admin access link" }, 503);
       }
-      return respond({ actionLink: data.properties.action_link });
+      return respond({ actionLink: data.properties.action_link, linkType });
     }
     if (action === "generate_camp_signin_link") {
       // Scoped to approved Camp admins; never expose token or accept arbitrary redirect.
