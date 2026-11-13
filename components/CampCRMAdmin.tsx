@@ -12,7 +12,11 @@ type Campaign={
   status:"draft"|"sending"|"sent";created_at:string;completed_at:string|null;
 };
 type ContactsResponse={contacts:Contact[];total:number;truncated:boolean};
-type CampaignsResponse={campaigns:Campaign[];subscribers:number};
+type MailingSettings={
+  postal_address:string;address_confirmed:boolean;updated_at:string|null;updated_by:string;
+};
+type CampaignsResponse={campaigns:Campaign[];subscribers:number;
+  mailing_settings:MailingSettings;mailing_ready:boolean};
 const stages=["new","follow_up","active","alumni","archived"] as const;
 const stageName=(stage:string)=>stage.replaceAll("_"," ").replace(/\b\w/g,x=>x.toUpperCase());
 
@@ -40,6 +44,12 @@ export default function CampCRMAdmin() {
   const [truncated,setTruncated]=useState(false);
   const [campaigns,setCampaigns]=useState<Campaign[]>([]);
   const [subscribers,setSubscribers]=useState(0);
+  const [mailingSettings,setMailingSettings]=useState<MailingSettings>({
+    postal_address:"",address_confirmed:false,updated_at:null,updated_by:"",
+  });
+  const [mailingAddress,setMailingAddress]=useState("");
+  const [mailingConfirmed,setMailingConfirmed]=useState(false);
+  const [mailingReady,setMailingReady]=useState(false);
   const [selected,setSelected]=useState<Contact|null>(null);
   const [search,setSearch]=useState("");
   const [status,setStatus]=useState("");
@@ -56,6 +66,11 @@ export default function CampCRMAdmin() {
   const loadCampaigns=useCallback(async()=>{
     const data=await adminCall("campaigns") as CampaignsResponse;
     setCampaigns(data.campaigns||[]);setSubscribers(data.subscribers||0);
+    const settings=data.mailing_settings||{postal_address:"",address_confirmed:false,updated_at:null,updated_by:""};
+    setMailingSettings(settings);
+    setMailingAddress(settings.postal_address);
+    setMailingConfirmed(settings.address_confirmed);
+    setMailingReady(Boolean(data.mailing_ready));
   },[]);
   useEffect(()=>{
     let active=true;
@@ -71,6 +86,21 @@ export default function CampCRMAdmin() {
     return contacts.filter(c=>!q||[c.email,c.display_name,c.phone,...c.tags,...c.source_kinds]
       .some(x=>x.toLowerCase().includes(q)));
   },[contacts,search]);
+  const mailingHasChanges=mailingAddress.trim()!==mailingSettings.postal_address ||
+    mailingConfirmed!==mailingSettings.address_confirmed;
+  const canSend=mailingReady && !mailingHasChanges;
+  async function saveMailingSettings(event:FormEvent<HTMLFormElement>){
+    event.preventDefault();setBusy(true);setStatus("");
+    try{
+      await adminCall("campaigns",{action:"update_mailing_settings",
+        postal_address:mailingAddress,address_confirmed:mailingConfirmed});
+      await loadCampaigns();
+      setStatus(mailingConfirmed?"Organization mailing address saved and confirmed.":
+        "Mailing address saved as incomplete. Sending remains disabled until confirmed.");
+    }catch(error){
+      setStatus(error instanceof Error?error.message:"Unable to save mailing details.");
+    }finally{setBusy(false);}
+  }
   async function addContact(event:FormEvent<HTMLFormElement>){
     event.preventDefault();setBusy(true);setStatus("");
     try{
@@ -100,7 +130,8 @@ export default function CampCRMAdmin() {
   }
   async function beginCampaign(id:string){
     const item=campaigns.find(c=>c.id===id);
-    if(!item||!window.confirm("Send “"+item.subject+"” to up to "+subscribers+
+    if(!item || !canSend)return;
+    if(!window.confirm("Send “"+item.subject+"” to up to "+subscribers+
       " confirmed subscribers? This cannot be undone once sending begins."))return;
     setBusy(true);setStatus("Preparing subscriber delivery queue…");
     try{
@@ -192,6 +223,37 @@ export default function CampCRMAdmin() {
         <p className="section-copy">Only people who used the email confirmation link receive newsletters or announcements. Sending is manually initiated and includes an unsubscribe link for every recipient.</p>
         <a href="/newsletter" className="btn btn-secondary" target="_blank" rel="noreferrer">Preview Subscription Page</a>
       </div>
+      <form className="card" onSubmit={saveMailingSettings} style={{marginBottom:18}}>
+        <h3>Organization Mailing Details</h3>
+        <p className="section-copy">Enter these details when they become available. The address will appear in newsletter and announcement footers. Campaigns can be drafted now, but sending remains unavailable until the mailing address is confirmed.</p>
+        <p className="section-copy" role="status" style={{fontWeight:700}}>
+          {mailingReady?"Mailing address verified by admin — ready for email footers":
+            "Setup required — mailing address not confirmed"}
+        </p>
+        <div className="field">
+          <label htmlFor="camp-mailing-address">Organization physical mailing address or PO Box</label>
+          <textarea id="camp-mailing-address" rows={3} maxLength={500}
+            placeholder="Official Camp Rise Again postal mailing address or PO Box"
+            value={mailingAddress}
+            onChange={event=>{setMailingAddress(event.target.value);setMailingConfirmed(false);}}/>
+        </div>
+        <label className="checks" style={{display:"flex",alignItems:"flex-start",gap:10,marginTop:8}}>
+          <input type="checkbox" checked={mailingConfirmed} disabled={!mailingAddress.trim()}
+            onChange={event=>setMailingConfirmed(event.target.checked)}/>
+          I confirm this is Camp Rise Again’s actual postal mailing address (or PO Box) and may appear in outgoing emails.
+        </label>
+        <div className="actions" style={{marginTop:12}}>
+          <button type="submit" className="btn btn-secondary" disabled={busy ||
+            !mailingHasChanges || (mailingAddress.trim().length>0 && !mailingConfirmed)}>
+            Save Mailing Details
+          </button>
+        </div>
+        {mailingSettings.updated_at&&<p className="section-copy">
+          Last saved {new Date(mailingSettings.updated_at).toLocaleString()}
+          {mailingSettings.updated_by?" by "+mailingSettings.updated_by:""}.
+        </p>}
+        {!mailingReady&&<p className="section-copy">You can save drafts and collect subscriptions while this is pending. No announcement or newsletter can be sent until the details are saved and confirmed.</p>}
+      </form>
       <form className="card" onSubmit={saveDraft}>
         <h3>{draft.id?"Edit draft":"Create announcement or newsletter"}</h3>
         <div className="field"><label>Type</label><select value={draft.kind} onChange={e=>setDraft({...draft,kind:e.target.value as "announcement"|"newsletter"})}>
@@ -216,9 +278,9 @@ export default function CampCRMAdmin() {
           <div className="actions">
             {item.status==="draft"&&<>
               <button type="button" className="btn btn-secondary" onClick={()=>setDraft({id:item.id,kind:item.kind,subject:item.subject,body:item.body})}>Edit</button>
-              <button type="button" disabled={busy||subscribers===0} className="btn btn-primary" onClick={()=>void beginCampaign(item.id)}>Confirm &amp; Send</button>
+              <button type="button" disabled={busy||subscribers===0||!canSend} className="btn btn-primary" onClick={()=>void beginCampaign(item.id)}>Confirm &amp; Send</button>
             </>}
-            {item.status==="sending"&&<button type="button" className="btn btn-primary" disabled={busy} onClick={()=>void continueCampaign(item.id)}>Resume Sending</button>}
+            {item.status==="sending"&&<button type="button" className="btn btn-primary" disabled={busy||!canSend} onClick={()=>void continueCampaign(item.id)}>Resume Sending</button>}
           </div>
         </div>)}
         {!campaigns.length&&<p className="section-copy">No announcements yet. Save the first draft above.</p>}
