@@ -22,6 +22,14 @@ export function validCampRecoveryLink(value: unknown): value is string {
   } catch { return false; }
 }
 
+function escapeHtmlAttribute(value: string) {
+  return value.replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/'/g, "&#39;");
+}
+
 export function campPasswordRecoveryEmail(link: string) {
   if (!validCampRecoveryLink(link)) {
     throw new Error("Invalid Camp Rise Again recovery link.");
@@ -45,5 +53,22 @@ export function campPasswordRecoveryEmail(link: string) {
       "Thank you,",
       "Camp Rise Again Support",
     ].join("\n"),
+    // The text version remains available for plain-text-only mail clients.
+    // Gmail and other HTML-capable clients display the short link label,
+    // never the long one-time Supabase URL as visible message text.
+    html: [
+      '<!doctype html><html lang="en"><body style="font-family:Arial,Helvetica,sans-serif;line-height:1.6;color:#14372d;">',
+      '<h2>Camp Rise Again — Admin Password Reset</h2>',
+      '<p>We received a request to create or reset your Camp Rise Again admin password.</p>',
+      '<p>Use the secure, single-use link below to choose a new password:</p>',
+      `<p><a href="${escapeHtmlAttribute(link)}" style="color:#11664e;font-weight:700;text-decoration:underline;">Click here to reset</a></p>`,
+      '<p>If you did not request this, ignore this email. Your existing password will remain unchanged.</p>',
+      '<p>Please Note: This is an automated email from Camp Rise Again Support.<br>',
+      'This inbox is not monitored, and replies will not receive a response.<br>',
+      'If you experience any issues or need assistance, please visit ',
+      '<a href="https://campriseagain.org">campriseagain.org</a> for contact information.</p>',
+      '<p>Thank you,<br>Camp Rise Again Support</p>',
+      '</body></html>',
+    ].join(""),
   };
 }
