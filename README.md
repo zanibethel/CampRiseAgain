@@ -40,7 +40,7 @@ The API route `/api/admin/visitor-analytics` verifies Supabase's authenticated u
 
 ## Admin sign-in and password recovery
 
-Camp Rise Again keeps the existing Supabase email-link sign-in and also supports email/password sign-in for the same two authorized admin accounts. Accounts are **not** created by entering an email. To choose a password for an existing admin, open `/admin`, select **Forgot password? / Create one**, and request a recovery email. The email directs the admin to `/admin/reset-password`, where a verified Supabase session is required to choose and confirm a strong password.
+Camp Rise Again keeps the existing Supabase email-link sign-in and also supports email/password sign-in for four approved admin addresses. The two existing administrators retain their accounts. Matthias and James can securely create a login via **Email Me a Sign-In Link** on their first visit; only these explicitly added addresses allow first-time signup. Other addresses cannot create Camp administrator access. To choose a password for an existing admin, open `/admin`, select **Forgot password? / Create one**, and request a recovery email. The email directs the admin to `/admin/reset-password`, where a verified Supabase session is required to choose and confirm a strong password.
 
 **Important Supabase Auth setting:** In the existing Supabase project (`yufptpfiwdbzzrvhkvux`), under **Authentication → URL Configuration**, ensure `https://campriseagain.org/admin/reset-password` is included in the allowed **Redirect URLs**, alongside the existing `/admin` callback. If this path is absent, Supabase may ignore the requested redirect and send the user to the Site URL instead. Do not change the Supabase Site URL because this project is shared with another app. The recovery link uses the existing Supabase recovery-email template (no extra mail service).
 
@@ -76,3 +76,12 @@ New recipients must click a 24-hour verification link and explicitly submit the 
 6. Deploy after verifying webhook configuration. Perform real email-to-inbox, Gmail-forward, Gmail-reply, and recipient-delivery tests. Test unauthorized senders, unverified recipients, duplicate events, paused recipients and expired reply routes.
 
 **Privacy and limitations:** Forwarded copies and relayed replies are plain text. Original attachments stay in the Resend inbox rather than being included in Gmail forwards. Existing camper, volunteer and contact website forms still use prepared mailto messages and are not changed by this PR. Do not transmit sensitive camper records as full email attachments.
+
+## November 12: additive Camp team admin and forwarders
+
+- Existing admins remain authorized: schofieldtierra@gmail.com and zanibethel@gmail.com.
+- New authorized admin emails: matthias.quellenberg@gmail.com and james.campriseagain@gmail.com.
+- New admins visit `/admin`, enter their approved Gmail address, and choose **Email Me a Sign-In Link**. Supabase creates the account upon this first authenticated email-link signup. Once their account is established, they can use **Forgot password? / Create one** if they prefer password sign-in. No global CreatorHub Auth email configuration is changed.
+- Existing forwarding recipients keep all of their original inboxes. Additional records are created pending consent: volunteer@campriseagain.org to matthias.quellenberg@gmail.com, and info@campriseagain.org to james.campriseagain@gmail.com.
+- In `/admin` > **Email Forwarding**, an existing admin chooses **Send Verification** for each pending recipient. Forwarding becomes active only after that recipient follows the email link and submits the confirmation page. This is intentional and prevents forwarding confidential messages to an unconfirmed Gmail mailbox.
+- SQL policies for Camp tables and only Camp-associated Storage policies are extended; CreatorHub policies are untouched. The Camp Supabase Edge bridge's protected admin and recovery allowlists must be deployed alongside the site code.
