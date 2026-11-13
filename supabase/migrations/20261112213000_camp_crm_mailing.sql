@@ -83,7 +83,7 @@ from (
  select lower(btrim(email)),coalesce(name,''),coalesce(phone,''),
    'contact',created_at from public.camp_rise_again_contact_messages
 ) s
-where e ~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$' and char_length(e)<=254
+where e ~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$' and char_length(e)<=254
 group by e
 on conflict(email) do update set
  display_name=case when public.camp_rise_again_crm_contacts.display_name=''
@@ -115,7 +115,7 @@ declare
   display text;
   source text;
 begin
-  if normalized !~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$'
+  if normalized !~ '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'
     or char_length(normalized)>254 then return new; end if;
   source := case tg_table_name
     when 'camp_rise_again_camper_applications' then 'camper'
