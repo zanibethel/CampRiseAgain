@@ -22,10 +22,17 @@ export function unsubscribeUrl(email: string, secret: string): string {
   return CAMP_MAILING_SITE + "/newsletter?mode=unsubscribe&email=" +
     encodeURIComponent(email) + "&token=" + mailingSignature(email, secret);
 }
-export function campaignEmailText(body: string, email: string, secret: string, postalAddress: string): string {
-  if (postalAddress.trim().length < 5) throw new Error("Mailing address is required for campaigns");
-  return body.trim() + "\n\n---\nCamp Rise Again • Men's mental health\n" +
+export type CampaignPurpose = "community" | "commercial";
+export function campaignEmailText(
+  body: string, email: string, secret: string, postalAddress: string, purpose: CampaignPurpose,
+): string {
+  if (!["community","commercial"].includes(purpose)) throw new Error("Invalid campaign purpose");
+  const address=postalAddress.trim();
+  if (purpose==="commercial" && address.length<10)
+    throw new Error("Confirmed mailing address required for commercial promotions");
+  return (purpose==="commercial"?"Advertisement from Camp Rise Again\n\n":"") +
+    body.trim() + "\n\n---\nCamp Rise Again • Men's mental health\n" +
     "You received this because you confirmed a Camp Rise Again email subscription.\n" +
     "Manage your subscription: " + unsubscribeUrl(email, secret) + "\n" +
-    postalAddress.trim() + "\ncampriseagain.org\n";
+    (address?address+"\n":"") + "campriseagain.org\n";
 }
