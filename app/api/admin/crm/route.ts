@@ -6,7 +6,7 @@ import { CAMP_MAILING_FROM, campaignEmailText, unsubscribeUrl } from "@/lib/camp
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 type Json = Record<string,unknown>;
-type Campaign={id:string;subject:string;body:string;status:string};
+type Campaign={id:string;purpose:"community"|"commercial";subject:string;body:string;status:string};
 type CampaignList={campaigns:Campaign[];mailing_settings:{postal_address:string;address_confirmed:boolean};mailing_ready:boolean};
 function response(value:unknown,status=200) {
   return Response.json(value,{status,headers:{"Cache-Control":"private, no-store"}});
@@ -59,10 +59,10 @@ export async function POST(request:Request) {
         return response({error:"Campaign delivery requires the Camp email credentials and signing secret."},503);
       const list=await campBridge<CampaignList>("admin_campaign_list",{},userToken);
       const postalAddress=list.mailing_settings?.postal_address||"";
-      if(!list.mailing_ready || postalAddress.trim().length<10)
-        return response({error:"Add and confirm the organization mailing address under Contacts & Announcements before sending."},409);
       const campaign=list.campaigns.find(item=>item.id===id&&item.status==="sending");
       if(!campaign)return response({error:"Campaign must be started before sending."},409);
+      if(campaign.purpose==="commercial" && !list.mailing_ready)
+        return response({error:"A confirmed postal address is required before sending commercial promotions."},409);
       const claimed=await campBridge<{emails:string[]}>("admin_campaign_claim",{id},userToken);
       const resend=new Resend(key);
       let sent=0,failed=0;
@@ -79,7 +79,8 @@ export async function POST(request:Request) {
         try{
           const {data,error}=await resend.emails.send({
             from:CAMP_MAILING_FROM,to:[email],subject:campaign.subject,
-            text:campaignEmailText(campaign.body,email,signKey,postalAddress),
+            text:campaignEmailText(campaign.body,email,signKey,
+              list.mailing_ready?postalAddress:"",campaign.purpose),
             headers:{"List-Unsubscribe":"<"+unsubscribeUrl(email,signKey)+">"},
           },{idempotencyKey:"camp-campaign:"+id+":"+hash});
           if(error)throw Error(error.name);
