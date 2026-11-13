@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 type Json = Record<string,unknown>;
 type Campaign={id:string;subject:string;body:string;status:string};
+type CampaignList={campaigns:Campaign[];mailing_settings:{postal_address:string;address_confirmed:boolean};mailing_ready:boolean};
 function response(value:unknown,status=200) {
   return Response.json(value,{status,headers:{"Cache-Control":"private, no-store"}});
 }
@@ -16,9 +17,10 @@ function token(request:Request) {
 }
 function errorReply(error:unknown) {
   const status=error instanceof CampBridgeError?error.status:503;
-  return response({error:status===403?"Only authorized Camp Rise Again admins can use the CRM.":
-    status===409?"This item changed or cannot be sent yet. Refresh and try again.":
-    "CRM service unavailable."},status);
+  return response({error:error instanceof CampBridgeError && (status===400 || status===409)
+    ? error.message
+    : status===403?"Only authorized Camp Rise Again admins can use the CRM."
+    : "CRM service unavailable."},status);
 }
 export async function GET(request:Request) {
   const userToken=token(request);
@@ -43,6 +45,7 @@ export async function POST(request:Request) {
   const actions:Record<string,string>={
     add_contact:"admin_crm_add",update_contact:"admin_crm_update",
     save_campaign:"admin_campaign_save",begin_campaign:"admin_campaign_begin",
+    update_mailing_settings:"admin_mailing_settings_update",
   };
   const action=String(input.action||"");
   try{
@@ -52,10 +55,12 @@ export async function POST(request:Request) {
       if(!/^[a-f0-9-]{36}$/i.test(id))return response({error:"Invalid campaign."},400);
       const key=process.env.CAMP_RESEND_API_KEY;
       const signKey=process.env.CAMP_MAILING_SIGNING_SECRET||"";
-      const postalAddress=process.env.CAMP_MAILING_POSTAL_ADDRESS||"";
-      if(!key||signKey.length<32||postalAddress.trim().length<5)
-        return response({error:"Campaign delivery needs its mail key, signing secret and organization mailing address."},503);
-      const list=await campBridge<{campaigns:Campaign[]}>("admin_campaign_list",{},userToken);
+      if(!key||signKey.length<32)
+        return response({error:"Campaign delivery requires the Camp email credentials and signing secret."},503);
+      const list=await campBridge<CampaignList>("admin_campaign_list",{},userToken);
+      const postalAddress=list.mailing_settings?.postal_address||"";
+      if(!list.mailing_ready || postalAddress.trim().length<10)
+        return response({error:"Add and confirm the organization mailing address under Contacts & Announcements before sending."},409);
       const campaign=list.campaigns.find(item=>item.id===id&&item.status==="sending");
       if(!campaign)return response({error:"Campaign must be started before sending."},409);
       const claimed=await campBridge<{emails:string[]}>("admin_campaign_claim",{id},userToken);
