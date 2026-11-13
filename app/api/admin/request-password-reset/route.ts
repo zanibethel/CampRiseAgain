@@ -23,19 +23,6 @@ function json(payload: unknown, status = 200) {
   });
 }
 
-/** The same existing atomic, service-role-only rate limit used by Camp forms. */
-async function claim(
-  client: ReturnType<typeof createClient>, secret: string,
-  key: string, max: number, windowSeconds: number,
-): Promise<boolean> {
-  const fingerprint = createHmac("sha256",secret).update("camp-auth-reset:"+key).digest("hex");
-  const {data,error}=await client.rpc("camp_rise_again_claim_form_rate",{
-    p_fingerprint:fingerprint,p_limit:max,p_window_seconds:windowSeconds,
-  });
-  if(error) throw new Error("Rate limit is unavailable.");
-  return data === true;
-}
-
 export async function POST(request: Request) {
   const origin=new URL(request.url);
   // Do not enable recovery generation on previews or alternate hostnames.
@@ -79,11 +66,21 @@ export async function POST(request: Request) {
     const supabase=createClient(supabaseUrl,supabaseKey,{
       auth:{autoRefreshToken:false,persistSession:false},
     });
+    // Runtime RPC exists in the database. This repo intentionally does not
+    // generate its full SQL types; narrow only this RPC's argument type.
+    async function claim(key:string,max:number,windowSeconds:number):Promise<boolean> {
+      const fingerprint=createHmac("sha256",secret).update("camp-auth-reset:"+key).digest("hex");
+      const {data,error}=await supabase.rpc("camp_rise_again_claim_form_rate",{
+        p_fingerprint:fingerprint,p_limit:max,p_window_seconds:windowSeconds,
+      } as never);
+      if(error) throw new Error("Rate limit is unavailable.");
+      return data===true;
+    }
     // Trust Vercel's own forwarded address, never a caller-provided client IP.
     // When missing, the common 'unknown' bucket fails closed under load.
     const ip=request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const ipAllowed=await claim(supabase,secret,"ip:"+ip,3,900);
-    const recipientAllowed=await claim(supabase,secret,"email:"+email,5,3600);
+    const ipAllowed=await claim("ip:"+ip,3,900);
+    const recipientAllowed=await claim("email:"+email,5,3600);
     if(!ipAllowed || !recipientAllowed) {
       return json({error:"Too many requests. Try again later."},429);
     }
