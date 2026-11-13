@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     // Runtime RPC exists in the database. This repo intentionally does not
     // generate its full SQL types; narrow only this RPC's argument type.
     async function claim(key:string,max:number,windowSeconds:number):Promise<boolean> {
-      const fingerprint=createHmac("sha256",secret).update("camp-auth-reset:"+key).digest("hex");
+      const fingerprint=createHmac("sha256",secret as string).update("camp-auth-reset:"+key).digest("hex");
       const {data,error}=await supabase.rpc("camp_rise_again_claim_form_rate",{
         p_fingerprint:fingerprint,p_limit:max,p_window_seconds:windowSeconds,
       } as never);
