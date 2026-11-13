@@ -14,7 +14,7 @@ test("newsletter physical address is editable and cannot be hard-coded as a serv
   assert.match(panel,/Save Mailing Details/);
   assert.match(panel,/address_confirmed:mailingConfirmed/);
   assert.match(api,/list\.mailing_settings\?\.postal_address/);
-  assert.match(api,/!list\.mailing_ready/);
+  assert.match(api,/campaign\.purpose==="commercial" && !list\.mailing_ready/);
 });
 test("mailing details are private service-role-only and begin/claim are gated",()=>{
   const migration=read("supabase/migrations/20261112213000_camp_crm_mailing.sql");
@@ -26,4 +26,6 @@ test("mailing details are private service-role-only and begin/claim are gated",(
   assert.match(edge,/action === "admin_campaign_begin"/);
   assert.match(edge,/action === "admin_campaign_claim"/);
   assert.ok((edge.match(/!settings\?\.address_confirmed/g)||[]).length>=2);
+  assert.match(edge,/reviewed\.purpose==="community" && params\.noncommercial_reviewed!==true/);
+  assert.match(edge,/campaign\.purpose==="commercial"/);
 });
