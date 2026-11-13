@@ -17,13 +17,23 @@ test("unsubscribe token is scoped to the address and compares safely",()=>{
   assert.equal(verifyMailingSignature("visitor@example.com","bad",secret),false);
   assert.throws(()=>mailingSignature("visitor@example.com","short"),/secret/);
 });
-test("campaigns include individualized unsubscribe, consent and mailing address",()=>{
+test("noncommercial community newsletters send without physical address",()=>{
   const message=campaignEmailText("Our next camp date has been announced.",
-    "visitor@example.com",secret,"Camp Rise Again, PO Box 123, TX 75001");
+    "visitor@example.com",secret,"","community");
   assert.match(message,/Our next camp date/);
   assert.match(message,/confirmed a Camp Rise Again email subscription/);
   assert.match(message,/mode=unsubscribe/);
-  assert.match(message,/PO Box 123/);
   assert.ok(message.includes(unsubscribeUrl("visitor@example.com",secret)));
-  assert.throws(()=>campaignEmailText("Hello","visitor@example.com",secret,""),/address/);
+  assert.doesNotMatch(message,/Advertisement/);
+});
+test("commercial promotions require a valid organization postal address",()=>{
+  assert.throws(()=>campaignEmailText("New sale","visitor@example.com",secret,
+    "","commercial"),/address/);
+  const message=campaignEmailText("New sale","visitor@example.com",secret,
+    "Camp Rise Again, PO Box 123, TX 75001","commercial");
+  assert.match(message,/Advertisement from Camp Rise Again/);
+  assert.match(message,/PO Box 123/);
+  assert.match(message,/mode=unsubscribe/);
+  assert.throws(()=>campaignEmailText("Hi","visitor@example.com",secret,
+    "","unclassified"),/purpose/);
 });
