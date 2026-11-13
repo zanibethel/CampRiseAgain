@@ -62,7 +62,15 @@ export async function POST(request:Request) {
       const resend=new Resend(key);
       let sent=0,failed=0;
       for(const email of claimed.emails){
+        // Opt-outs take effect even if a campaign was queued earlier.
+        const consent=await campBridge<{eligible:boolean}>(
+          "admin_campaign_eligible",{email},userToken);
+        if(!consent.eligible){
+          await campBridge("admin_campaign_suppress",{id,email},userToken);
+          continue;
+        }
         const hash=createHash("sha256").update(email).digest("hex").slice(0,32);
+        let providerId="";
         try{
           const {data,error}=await resend.emails.send({
             from:CAMP_MAILING_FROM,to:[email],subject:campaign.subject,
@@ -70,17 +78,20 @@ export async function POST(request:Request) {
             headers:{"List-Unsubscribe":"<"+unsubscribeUrl(email,signKey)+">"},
           },{idempotencyKey:"camp-campaign:"+id+":"+hash});
           if(error)throw Error(error.name);
-          await campBridge("admin_campaign_result",{id,email,delivered:true,
-            provider_id:data?.id||""},userToken);
-          sent++;
+          providerId=data?.id||"";
         }catch(error){
-          // If provider succeeded but ledger failed, its fixed idempotency key
-          // protects the recipient from a duplicate on later lease recovery.
-          try{await campBridge("admin_campaign_result",{id,email,delivered:false,
-            error_code:error instanceof Error?error.name:"delivery_error"},userToken);}
-          catch{ /* stale lease will be retried with the same provider key */ }
+          try{
+            await campBridge("admin_campaign_result",{id,email,delivered:false,
+              error_code:error instanceof Error?error.name:"delivery_error"},userToken);
+          }catch{ /* ledger claims expire and may safely be retried */ }
           failed++;
+          continue;
         }
+        // If recording API acceptance fails, leave the lease intact. On
+        // recovery, the same Resend idempotency key prevents duplicate mail.
+        await campBridge("admin_campaign_result",{id,email,delivered:true,
+          provider_id:providerId},userToken);
+        sent++;
       }
       const progress=await campBridge("admin_campaign_progress",{id},userToken);
       return response({sent,failed,...progress as Json});
