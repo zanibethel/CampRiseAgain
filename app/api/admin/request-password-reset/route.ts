@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CAMP_HOST = "campriseagain.org";
-const ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com"]);
+const ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com", "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"]);
 
 function json(payload: unknown, status = 200) {
   return Response.json(payload, {

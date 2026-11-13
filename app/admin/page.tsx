@@ -12,7 +12,9 @@ import FAQAdmin from "@/components/FAQAdmin";
 import PastCampsAdmin from "@/components/PastCampsAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
-const ADMINS = ["schofieldtierra@gmail.com", "zanibethel@gmail.com"];
+const ADMINS = ["schofieldtierra@gmail.com", "zanibethel@gmail.com", "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"];
+// These two approved admins can create their Supabase login on their first magic-link sign-in.
+const NEW_CAMP_ADMINS = new Set(["matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"]);
 type AdminSection = "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "submissions" | "faq" | "past-camps";
 
 type ResourceItem = {
@@ -184,7 +186,7 @@ export default function AdminPage() {
         email: normalized,
         options: {
           emailRedirectTo: `${window.location.origin}/admin`,
-          shouldCreateUser: false,
+          shouldCreateUser: NEW_CAMP_ADMINS.has(normalized),
         },
       });
       setStatus(error ? "Unable to send the sign-in email. Please try again shortly." : "Check your email for a secure sign-in link. Open it in this browser if possible. Older links cannot be reused.");

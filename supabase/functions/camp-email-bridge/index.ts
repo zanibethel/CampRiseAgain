@@ -11,7 +11,7 @@ import { createClient } from "npm:@supabase/supabase-js@2.95.0";
  * to the three Camp mail tables.
  */
 const TOKEN_SHA256 = "2e955776ef1159eabd20500751634710fa560dc1f9bae7b4dfb5d549479ac803";
-const ADMIN_EMAILS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com"]);
+const ADMIN_EMAILS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com", "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"]);
 const INBOXES = new Set(["info", "volunteer", "forms"]);
 const ORGANIZATION_ADDRESSES = new Set([
   "info@campriseagain.org", "volunteer@campriseagain.org", "forms@campriseagain.org",

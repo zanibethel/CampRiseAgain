@@ -8,7 +8,7 @@ const VERCEL_PROJECT_ID = "prj_1Ni5S4z7UFqrpQvKV9gWgc4ZhImq";
 const VERCEL_TEAM_ID = "team_AH72aX1BaaPucIOvrSgvpEhw";
 const SUPABASE_URL = "https://yufptpfiwdbzzrvhkvux.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JpayDIqb8Gy-hnGSL99fdg_jmKQQNJh";
-const ALLOWED_ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com"]);
+const ALLOWED_ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com", "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"]);
 
 type Metrics = { pageviews: number; visitors: number };
 type VercelCount = { data?: { pageviews?: number; visitors?: number } };
