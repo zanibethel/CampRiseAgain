@@ -74,6 +74,10 @@ export async function GET(request:Request){
   const token=bearer(request);
   if(!token)return json({error:"Sign in to view administrators."},401);
   try{
+    if(new URL(request.url).searchParams.get("me")==="1"){
+      const me=await campBridge<{email:string}>("admin_team_me",{},token);
+      return json(me);
+    }
     const result=await campBridge<{admins:AdminMember[];email:string}>("admin_team_list",{},token);
     return json(result);
   }catch(error){return responseError(error);}
