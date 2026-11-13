@@ -2,15 +2,15 @@ import { createHmac } from "node:crypto";
 import { Resend } from "resend";
 import { campBridge, CampBridgeError } from "@/lib/camp-supabase-bridge";
 import {
-  CAMP_AUTH_FROM, CAMP_RECOVERY_GENERIC_MESSAGE, CAMP_RECOVERY_REDIRECT,
-  campPasswordRecoveryEmail,
+  CAMP_AUTH_FROM, CAMP_RECOVERY_GENERIC_MESSAGE,
+  campPasswordRecoveryEmail, campAdminInvitationEmail,
 } from "@/lib/camp-auth-email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CAMP_HOST = "campriseagain.org";
-const ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com"]);
+
 
 function json(payload: unknown, status = 200) {
   return Response.json(payload, {
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
   }
   const email=supplied.trim().toLowerCase();
   const confirmation={ok:true,message:CAMP_RECOVERY_GENERIC_MESSAGE};
-  if(!ADMINS.has(email)) return json(confirmation);
+
 
   const secret=process.env.CAMP_SUPABASE_BRIDGE_TOKEN;
   const resendKey=process.env.CAMP_RESEND_API_KEY || process.env.RESEND_API_KEY;
@@ -68,11 +68,19 @@ export async function POST(request: Request) {
       .update("camp-auth-reset:ip:"+ip).digest("hex");
     const emailFingerprint=createHmac("sha256",secret)
       .update("camp-auth-reset:email:"+email).digest("hex");
-    const {actionLink}=await campBridge<{actionLink:string}>(
-      "generate_camp_recovery_link",
-      {email,ipFingerprint,emailFingerprint},
-    );
-    const {subject,text,html}=campPasswordRecoveryEmail(actionLink);
+    const {actionLink,linkType,approved}=await campBridge<{
+      actionLink?:string;linkType?:"recovery"|"invite";approved:boolean;
+    }>("generate_camp_recovery_link", {email,ipFingerprint,emailFingerprint});
+    if(!approved) return json(confirmation);
+    if(!actionLink) throw new Error("Missing approved recovery link");
+    // The protected Edge bridge decides whether this approved email has
+    // an existing Auth account. Reject unexpected actions instead of
+    // delivering any unrecognized Supabase link or redirect.
+    const {subject,text,html}=linkType==="invite"
+      ? campAdminInvitationEmail(actionLink)
+      : linkType==="recovery"
+        ? campPasswordRecoveryEmail(actionLink)
+        : (()=>{ throw new Error("Unexpected admin link type"); })();
     const {error:sendError}=await new Resend(resendKey).emails.send({
       from:CAMP_AUTH_FROM,to:[email],subject,text,html,
     });
