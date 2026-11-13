@@ -74,3 +74,27 @@ which were already required by the original password-recovery flow.
 ## November 12 repair
 
 Live production requests exposed a missing Vercel `SUPABASE_SECRET_KEY` value. We intentionally do **not** restore a privileged database/Auth secret to Vercel. Instead the recovery route delegates rate limits and `auth.admin.generateLink` through the existing hashed-bearer Supabase Edge bridge. The previous direct service-key approach was the cause of the 503 error; the bridge preserves credential isolation across Camp and CreatorHub. The bridge returns the sensitive recovery action link only to Vercel, which validates it and sends it via Resend. Neither the link nor the service key is returned to the browser or written to logs.
+
+## First-time admin onboarding
+
+The Camp admin allowlist includes James and Matthias, but merely granting
+that role does not create a Supabase Auth user. The email-forwarding verification
+is a **separate** process: receiving or verifying mail forwarding does not
+enable login or establish a password.
+
+The private Edge bridge now checks the **existing Supabase Auth user list**
+before generating an action link:
+- Existing approved Auth user → Supabase `recovery` action link, same branded reset email.
+- Approved email without an Auth user → Supabase `invite` action link, branded
+  **Camp Rise Again — create your admin password** email.
+- Every link stays scoped to the known Supabase origin and
+  `https://campriseagain.org/admin/reset-password` redirect and is
+  sent from `support@campriseagain.org` through Resend.
+- Unauthorized email → generic public response, no Auth account creation.
+- Admin onboarding and recovery retain the same per-IP/per-email rate limits.
+- The private Edge Function must be deployed **before** the public route which
+  expects the `linkType` field. Do not alter CreatorHub shared SMTP/auth hooks.
+- Verify in a new signed-out browser that a newly invited admin can follow
+  the link and choose a password, then sign in. Confirm the forwarding invitation
+  separately using `info@campriseagain.org` or `volunteer@campriseagain.org`
+  as appropriate. Never assume invitation success implies forwarding activation.
