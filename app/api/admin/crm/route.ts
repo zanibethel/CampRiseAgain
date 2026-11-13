@@ -52,7 +52,9 @@ export async function POST(request:Request) {
       if(!/^[a-f0-9-]{36}$/i.test(id))return response({error:"Invalid campaign."},400);
       const key=process.env.CAMP_RESEND_API_KEY;
       const signKey=process.env.CAMP_MAILING_SIGNING_SECRET||"";
-      if(!key||signKey.length<32)return response({error:"Campaign email delivery is not configured."},503);
+      const postalAddress=process.env.CAMP_MAILING_POSTAL_ADDRESS||"";
+      if(!key||signKey.length<32||postalAddress.trim().length<5)
+        return response({error:"Campaign delivery needs its mail key, signing secret and organization mailing address."},503);
       const list=await campBridge<{campaigns:Campaign[]}>("admin_campaign_list",{},userToken);
       const campaign=list.campaigns.find(item=>item.id===id&&item.status==="sending");
       if(!campaign)return response({error:"Campaign must be started before sending."},409);
@@ -64,7 +66,7 @@ export async function POST(request:Request) {
         try{
           const {data,error}=await resend.emails.send({
             from:CAMP_MAILING_FROM,to:[email],subject:campaign.subject,
-            text:campaignEmailText(campaign.body,email,signKey),
+            text:campaignEmailText(campaign.body,email,signKey,postalAddress),
             headers:{"List-Unsubscribe":"<"+unsubscribeUrl(email,signKey)+">"},
           },{idempotencyKey:"camp-campaign:"+id+":"+hash});
           if(error)throw Error(error.name);
