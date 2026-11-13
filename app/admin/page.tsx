@@ -197,21 +197,29 @@ export default function AdminPage() {
 
   async function requestPasswordReset(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!supabase || authBusy) return;
+    if (authBusy) return;
     const normalized = authorizedEmail();
     if (!normalized) return;
 
     setAuthBusy(true);
     setStatus("");
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(normalized, {
-        redirectTo: `${window.location.origin}/admin/reset-password`,
+      const response = await fetch("/api/admin/request-password-reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalized }),
+        cache: "no-store",
       });
-      if (error) {
-        setStatus("The recovery email could not be sent right now. Please try again shortly.");
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(response.status === 429 ?
+          "Too many requests. Try again later." :
+          "The recovery email could not be sent right now. Please try again shortly.");
         return;
       }
-      setStatus("If this admin account is registered, an email with a password-creation link is on its way. Open that link to create your password; it will open a separate secure form.");
+      setStatus((typeof result.message === "string" ? result.message :
+        "If the account exists, check your inbox.") +
+        " The link opens a separate secure form to create your password.");
     } catch {
       setStatus("The recovery email could not be sent right now. Please try again shortly.");
     } finally {
