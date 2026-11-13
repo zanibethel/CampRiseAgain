@@ -5,7 +5,7 @@ import SiteHeader from "@/components/SiteHeader";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { campPasswordUpdateErrorMessage } from "@/lib/camp-auth-password-errors";
 
-const ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com"]);
+const ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com", "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"]);
 
 export default function CreateAdminPassword() {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
