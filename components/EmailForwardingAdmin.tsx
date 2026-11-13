@@ -66,6 +66,21 @@ export default function EmailForwardingAdmin() {
     } finally { setBusy(false); }
   }
 
+  async function resendVerification(item: Forwarder) {
+    if (busy || item.verified_at) return;
+    setBusy(true); setStatus("");
+    try {
+      const result = await call("POST", {
+        email: item.email, display_name: item.display_name,
+        title: item.title, inboxes: item.inboxes,
+      });
+      setStatus(result.message || "Verification email sent to " + item.email + ".");
+      await refresh();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "Unable to resend verification.");
+    } finally { setBusy(false); }
+  }
+
   async function save(item: Forwarder) {
     setBusy(true); setStatus("");
     try {
@@ -161,6 +176,10 @@ export default function EmailForwardingAdmin() {
           <div className="actions">
             <button className="btn btn-primary" type="button" disabled={busy}
               onClick={() => void save(item)}>Save</button>
+            {!item.verified_at && (
+              <button className="btn btn-secondary" type="button" disabled={busy}
+                onClick={() => void resendVerification(item)}>Send Verification</button>
+            )}
             <button className="btn btn-secondary" type="button" disabled={busy}
               onClick={() => void remove(item)}>Remove</button>
           </div>
