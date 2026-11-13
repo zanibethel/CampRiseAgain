@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { campBridge, CampBridgeError } from "@/lib/camp-supabase-bridge";
 import {
   CAMP_AUTH_FROM, CAMP_RECOVERY_GENERIC_MESSAGE, CAMP_RECOVERY_REDIRECT,
   campPasswordRecoveryEmail,
@@ -10,7 +10,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CAMP_HOST = "campriseagain.org";
-const SUPABASE_ORIGIN = "https://yufptpfiwdbzzrvhkvux.supabase.co";
 const ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com"]);
 
 function json(payload: unknown, status = 200) {
@@ -54,52 +53,26 @@ export async function POST(request: Request) {
   if(!ADMINS.has(email)) return json(confirmation);
 
   const secret=process.env.CAMP_SUPABASE_BRIDGE_TOKEN;
-  // This route is intentionally pinned to Camp's known Auth project.
-  // The general-purpose SUPABASE_URL variable is not authoritative here:
-  // it can include trailing slashes or differ from this project's Auth URL.
-  const supabaseUrl=SUPABASE_ORIGIN;
-  const supabaseKey=process.env.SUPABASE_SECRET_KEY;
   const resendKey=process.env.CAMP_RESEND_API_KEY || process.env.RESEND_API_KEY;
-  if(!secret || !supabaseKey || !resendKey) {
-    // Log only which required config keys are missing, never values/secrets.
-    console.error("[camp-auth] Required credentials unavailable", {
-      bridgeConfigured:Boolean(secret),
-      supabaseKeyConfigured:Boolean(supabaseKey),
-      resendKeyConfigured:Boolean(resendKey),
-    });
+  if(!secret || !resendKey) {
+    console.error("[camp-auth] Recovery bridge or email delivery is not configured.");
     return json({error:"Password recovery is temporarily unavailable."},503);
   }
 
   try {
-    const supabase=createClient(supabaseUrl,supabaseKey,{
-      auth:{autoRefreshToken:false,persistSession:false},
-    });
-    // Runtime RPC exists in the database. This repo intentionally does not
-    // generate its full SQL types; narrow only this RPC's argument type.
-    async function claim(key:string,max:number,windowSeconds:number):Promise<boolean> {
-      const fingerprint=createHmac("sha256",secret as string).update("camp-auth-reset:"+key).digest("hex");
-      const {data,error}=await supabase.rpc("camp_rise_again_claim_form_rate",{
-        p_fingerprint:fingerprint,p_limit:max,p_window_seconds:windowSeconds,
-      } as never);
-      if(error) throw new Error("Rate limit is unavailable.");
-      return data===true;
-    }
-    // Trust Vercel's own forwarded address, never a caller-provided client IP.
-    // When missing, the common 'unknown' bucket fails closed under load.
+    // Use Camp's existing hashed-bearer Supabase Edge bridge instead of
+    // requiring a Supabase service key inside Vercel. The bridge has an
+    // isolated, built-in service credential and enforces rate limits.
     const ip=request.headers.get("x-vercel-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const ipAllowed=await claim("ip:"+ip,3,900);
-    const recipientAllowed=await claim("email:"+email,5,3600);
-    if(!ipAllowed || !recipientAllowed) {
-      return json({error:"Too many requests. Try again later."},429);
-    }
-    const {data,error}=await supabase.auth.admin.generateLink({
-      type:"recovery",email,options:{redirectTo:CAMP_RECOVERY_REDIRECT},
-    });
-    if(error || !data?.properties?.action_link) {
-      console.error("[camp-auth] Unable to generate recovery link.");
-      return json({error:"Password recovery is temporarily unavailable."},503);
-    }
-    const {subject,text}=campPasswordRecoveryEmail(data.properties.action_link);
+    const ipFingerprint=createHmac("sha256",secret)
+      .update("camp-auth-reset:ip:"+ip).digest("hex");
+    const emailFingerprint=createHmac("sha256",secret)
+      .update("camp-auth-reset:email:"+email).digest("hex");
+    const {actionLink}=await campBridge<{actionLink:string}>(
+      "generate_camp_recovery_link",
+      {email,ipFingerprint,emailFingerprint},
+    );
+    const {subject,text}=campPasswordRecoveryEmail(actionLink);
     const {error:sendError}=await new Resend(resendKey).emails.send({
       from:CAMP_AUTH_FROM,to:[email],subject,text,
     });
@@ -109,6 +82,10 @@ export async function POST(request: Request) {
     }
     return json(confirmation);
   }catch(error){
+    if(error instanceof CampBridgeError && error.status===429) {
+      return json({error:"Too many requests. Try again later."},429);
+    }
+    // Never log sensitive recovery URLs or recipient addresses.
     console.error("[camp-auth] Recovery request failed:",
       error instanceof Error ? error.name : "UnknownError");
     return json({error:"Password recovery is temporarily unavailable."},503);
