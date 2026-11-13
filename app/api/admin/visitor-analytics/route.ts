@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import {campBridge} from "@/lib/camp-supabase-bridge";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const VERCEL_PROJECT_ID = "prj_1Ni5S4z7UFqrpQvKV9gWgc4ZhImq";
 const VERCEL_TEAM_ID = "team_AH72aX1BaaPucIOvrSgvpEhw";
-const SUPABASE_URL = "https://yufptpfiwdbzzrvhkvux.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JpayDIqb8Gy-hnGSL99fdg_jmKQQNJh";
-const ALLOWED_ADMINS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com", "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"]);
+
 
 type Metrics = { pageviews: number; visitors: number };
 type VercelCount = { data?: { pageviews?: number; visitors?: number } };
@@ -83,13 +81,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: { user }, error } = await supabase.auth.getUser(header.slice(7));
-    if (error || !user || !ALLOWED_ADMINS.has(user.email?.toLowerCase() || "")) {
-      return response({ error: "Your account is not authorized to view analytics." }, 403);
-    }
+    // Use the same live Camp directory check as all other privileged APIs.
+    // A revoked admin cannot access analytics even with an unexpired JWT.
+    await campBridge("admin_team_me",{},header.slice(7));
   } catch {
     return response({ error: "Could not verify your admin session." }, 503);
   }
