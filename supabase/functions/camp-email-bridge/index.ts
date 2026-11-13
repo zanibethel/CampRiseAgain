@@ -90,6 +90,37 @@ Deno.serve(async (request: Request) => {
   }
 
   try {
+    if (action === "generate_camp_recovery_link") {
+      // This route is accessible only via the server-only, hashed bridge bearer.
+      // It NEVER accepts a caller-selected redirect, arbitrary account, or
+      // returns anything to public browsers: Vercel sends the link via Resend.
+      const recipient = email(params.email);
+      const ipFingerprint = str(params.ipFingerprint, 64);
+      const emailFingerprint = str(params.emailFingerprint, 64);
+      if (!recipient || !ADMIN_EMAILS.has(recipient) ||
+          !SHA256.test(ipFingerprint) || !SHA256.test(emailFingerprint)) {
+        return respond({ error: "Recovery request not authorized" }, 403);
+      }
+      const { data: ipAllowed, error: ipError } = await db.rpc("camp_rise_again_claim_form_rate", {
+        p_fingerprint: ipFingerprint, p_limit: 3, p_window_seconds: 900,
+      });
+      if (ipError) return respond({ error: "Recovery service unavailable" }, 503);
+      if (!ipAllowed) return respond({ error: "Too many requests" }, 429);
+      const { data: emailAllowed, error: emailError } = await db.rpc("camp_rise_again_claim_form_rate", {
+        p_fingerprint: emailFingerprint, p_limit: 5, p_window_seconds: 3600,
+      });
+      if (emailError) return respond({ error: "Recovery service unavailable" }, 503);
+      if (!emailAllowed) return respond({ error: "Too many requests" }, 429);
+      const { data, error } = await db.auth.admin.generateLink({
+        type: "recovery",
+        email: recipient,
+        options: { redirectTo: "https://campriseagain.org/admin/reset-password" },
+      });
+      if (error || typeof data?.properties?.action_link !== "string") {
+        return respond({ error: "Unable to generate recovery link" }, 503);
+      }
+      return respond({ actionLink: data.properties.action_link });
+    }
     if (action === "ping") {
       const { error } = await db.from("camp_rise_again_email_forwarders").select("id").limit(1);
       return error ? respond({ error: "Data query failed" }, 503) : respond({ ok: true });
