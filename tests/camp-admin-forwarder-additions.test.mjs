@@ -41,3 +41,19 @@ test("forwarding additions remain inactive until mailbox verification", () => {
   assert.match(component,/Send Verification/);
   assert.match(component,/call\("POST", \{/);
 });
+
+test("forwarding checkboxes show the matching inbox email in existing and new recipient forms", () => {
+  const component = read("components/EmailForwardingAdmin.tsx");
+  for (const [key, title, address] of [
+    ["info", "General inquiries", "info@campriseagain.org"],
+    ["volunteer", "Volunteers", "volunteer@campriseagain.org"],
+    ["forms", "Website forms", "forms@campriseagain.org"],
+  ]) {
+    assert.ok(component.includes(`id: "${key}", label: "${title}", address: "${address}"`));
+  }
+  const renderedLabels = component.match(/<InboxLabel label={box.label} address={box.address} \/>/g) || [];
+  assert.equal(renderedLabels.length, 2, "Both existing and new forwarding screens display the mailbox address");
+  assert.match(component, /overflowWrap: "anywhere"/);
+  assert.match(component, /item.inboxes.includes\(box.id\)/);
+  assert.match(component, /newForwarder.inboxes.includes\(box.id\)/);
+});
