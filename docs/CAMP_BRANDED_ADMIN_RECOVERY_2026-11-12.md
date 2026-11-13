@@ -9,11 +9,7 @@ CreatorHub account verification/password reset messages too.
 
 Instead, Camp's existing **Forgot password? / Create one** form calls a
 new server-only `POST /api/admin/request-password-reset` endpoint.
-This endpoint uses the **existing** Supabase service key only on the
-server to call `auth.admin.generateLink({type:"recovery"})`. This
-creates a normal short-lived Supabase recovery action link **without**
-sending a Supabase default email. It sends that link with the existing
-Resend account from:
+This endpoint uses the **existing protected `camp-email-bridge` Supabase Edge Function**, which holds Supabase's own service credential, to call `auth.admin.generateLink({type:"recovery"})`. The Edge Function creates a short-lived Supabase recovery action link **without** sending a Supabase default email, then returns it only to Vercel's authenticated private bridge. Vercel sends that link with the existing Resend account from:
 
 - From: **Camp Rise Again Support <support@campriseagain.org>**
 - Subject: **Camp Rise Again — reset your admin password**
@@ -35,10 +31,7 @@ which were already required by the original password-recovery flow.
 - The route runs only on the production Camp origin, requires
   same-origin JSON POST, validates the request body, and never exposes
   service credentials to the browser.
-- Existing atomic `camp_rise_again_claim_form_rate` RPC throttles
-  3 requests per 15 minutes per Vercel client address plus
-  5 requests per hour per recipient; fingerprints use HMAC and no raw
-  IP is sent to the database.
+- Existing atomic `camp_rise_again_claim_form_rate` RPC is invoked inside the protected Edge bridge, throttling 3 requests per 15 minutes per Vercel client address plus 5 requests per hour per recipient. Vercel HMAC-hashes fingerprints and no raw IP is sent to Supabase. The protected Edge action validates the admin allowlist, exact fingerprint format and a fixed Camp recovery redirect before generating links.
 - Fail closed if credentials, rate limiting or email delivery fail.
 - The generated action link is validated against the expected Supabase
   origin, exact Camp redirect and `type=recovery`. Links appear only
@@ -52,10 +45,8 @@ which were already required by the original password-recovery flow.
 
 1. Run `npm run test:mail` (includes scoped endpoint tests) and
    `npm run build`; review PR and Vercel preview.
-2. Confirm production `SUPABASE_URL`, `SUPABASE_SECRET_KEY`,
-   `CAMP_SUPABASE_BRIDGE_TOKEN`, and `CAMP_RESEND_API_KEY` remain
-   configured. No new secrets or global auth config needed.
-3. Confirm Resend `campriseagain.org` domain is verified for sending.
+2. Confirm production `CAMP_SUPABASE_BRIDGE_TOKEN` and `CAMP_RESEND_API_KEY` (or `RESEND_API_KEY`) remain configured. The Supabase service key is **not** required in Vercel; it stays in Supabase's Edge Function environment. No new secrets or global auth config needed.
+3. Confirm Resend `campriseagain.org` domain is verified for sending, and deploy the **additive** Supabase Edge Function before merging the website route.
 4. Merge only after successful CI, then verify the exact merge SHA
    is READY in Vercel production.
 5. With a signed-out Camp admin browser, request a recovery email
@@ -76,3 +67,7 @@ project's default Supabase Auth email. Its sender is not changed.
 Future customization can use the same app-scoped approach, but needs
 the same rate limits and explicit user verification to avoid creating
 new Supabase accounts with a magic-link action.
+
+## November 12 repair
+
+Live production requests exposed a missing Vercel `SUPABASE_SECRET_KEY` value. We intentionally do **not** restore a privileged database/Auth secret to Vercel. Instead the recovery route delegates rate limits and `auth.admin.generateLink` through the existing hashed-bearer Supabase Edge bridge. The previous direct service-key approach was the cause of the 503 error; the bridge preserves credential isolation across Camp and CreatorHub. The bridge returns the sensitive recovery action link only to Vercel, which validates it and sends it via Resend. Neither the link nor the service key is returned to the browser or written to logs.
