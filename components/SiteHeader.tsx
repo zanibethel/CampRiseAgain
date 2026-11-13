@@ -13,6 +13,7 @@ const mobilePrimaryLinks = [
 ];
 
 const mobileSecondaryLinks = [
+  { href: "/newsletter", label: "Newsletter" },
   { href: "/past-camps", label: "Past Camps" },
   { href: "/michael-garza", label: "Our Story" },
   { href: "/#contact", label: "Contact" },
@@ -69,6 +70,7 @@ export default function SiteHeader() {
             <a href="/#about">About</a>
             <a className="resources-link" href="/resources">Resources</a>
             <a href="/faq">FAQs</a>
+            <a href="/newsletter">Newsletter</a>
             <a href="/past-camps">Past Camps</a>
             <a className="legacy-link" href="/michael-garza">Our Story</a>
             <a href="/#contact">Contact</a>
