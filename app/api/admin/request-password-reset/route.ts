@@ -54,11 +54,19 @@ export async function POST(request: Request) {
   if(!ADMINS.has(email)) return json(confirmation);
 
   const secret=process.env.CAMP_SUPABASE_BRIDGE_TOKEN;
-  const supabaseUrl=process.env.SUPABASE_URL;
+  // This route is intentionally pinned to Camp's known Auth project.
+  // The general-purpose SUPABASE_URL variable is not authoritative here:
+  // it can include trailing slashes or differ from this project's Auth URL.
+  const supabaseUrl=SUPABASE_ORIGIN;
   const supabaseKey=process.env.SUPABASE_SECRET_KEY;
-  const resendKey=process.env.CAMP_RESEND_API_KEY;
-  if(!secret || !supabaseKey || !resendKey || supabaseUrl!==SUPABASE_ORIGIN) {
-    console.error("[camp-auth] Recovery sender is missing production configuration.");
+  const resendKey=process.env.CAMP_RESEND_API_KEY || process.env.RESEND_API_KEY;
+  if(!secret || !supabaseKey || !resendKey) {
+    // Log only which required config keys are missing, never values/secrets.
+    console.error("[camp-auth] Required credentials unavailable", {
+      bridgeConfigured:Boolean(secret),
+      supabaseKeyConfigured:Boolean(supabaseKey),
+      resendKeyConfigured:Boolean(resendKey),
+    });
     return json({error:"Password recovery is temporarily unavailable."},503);
   }
 
