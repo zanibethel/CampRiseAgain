@@ -11,7 +11,9 @@ import { createClient } from "npm:@supabase/supabase-js@2.95.0";
  * to the three Camp mail tables.
  */
 const TOKEN_SHA256 = "2e955776ef1159eabd20500751634710fa560dc1f9bae7b4dfb5d549479ac803";
-const ADMIN_EMAILS = new Set(["schofieldtierra@gmail.com", "zanibethel@gmail.com"]);
+const PROTECTED_ADMIN = "zanibethel@gmail.com";
+const ADMINS_TABLE = "camp_rise_again_admin_accounts";
+const ADMIN_AUDIT = "camp_rise_again_admin_audit";
 const INBOXES = new Set(["info", "volunteer", "forms"]);
 const ORGANIZATION_ADDRESSES = new Set([
   "info@campriseagain.org", "volunteer@campriseagain.org", "forms@campriseagain.org",
@@ -75,6 +77,43 @@ Deno.serve(async (request: Request) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // All Camp administrator decisions come from the private shared directory.
+  // Never trust browser allowlists or user-editable metadata for permissions.
+  async function activeCampAdmin(address: string): Promise<boolean> {
+    if (!address) return false;
+    const { data, error } = await db.from(ADMINS_TABLE)
+      .select("email").eq("email", address).eq("enabled", true).maybeSingle();
+    if (error) throw new Error("Cannot check administrator directory");
+    return !!data;
+  }
+  async function campAuthUsers(): Promise<Array<{
+    email?: string; email_confirmed_at?: string | null; last_sign_in_at?: string | null;
+  }>> {
+    const rows: Array<{email?: string; email_confirmed_at?: string | null; last_sign_in_at?: string | null}> = [];
+    for (let page = 1; page <= 10; page++) {
+      const { data, error } = await db.auth.admin.listUsers({page, perPage: 1000});
+      if (error || !data) throw new Error("Auth account status unavailable");
+      rows.push(...data.users);
+      if (data.users.length < 1000) return rows;
+    }
+    throw new Error("Auth account status truncated");
+  }
+  async function adminActionLink(address: string): Promise<{
+    actionLink: string; linkType: "recovery" | "invite";
+  }> {
+    const users = await campAuthUsers();
+    const exists = users.some(u => u.email?.toLowerCase() === address);
+    const linkType = exists ? "recovery" : "invite";
+    const {data, error} = await db.auth.admin.generateLink({
+      type: linkType, email: address,
+      options: {redirectTo: "https://campriseagain.org/admin/reset-password"},
+    });
+    if (error || typeof data?.properties?.action_link !== "string") {
+      throw new Error("Unable to generate Camp admin access link");
+    }
+    return {actionLink: data.properties.action_link, linkType};
+  }
+
   const needsAdmin = action.startsWith("admin_");
   let adminEmail: string | null = null;
   if (needsAdmin) {
@@ -82,11 +121,17 @@ Deno.serve(async (request: Request) => {
     if (!userToken) return respond({ error: "Admin authentication required" }, 403);
     const { data, error } = await db.auth.getUser(userToken);
     const user = data?.user;
-    if (error || !user || !user.email_confirmed_at ||
-        !ADMIN_EMAILS.has(user.email?.toLowerCase() || "")) {
+    if (error || !user || !user.email_confirmed_at) {
       return respond({ error: "Admin access denied" }, 403);
     }
     adminEmail = user.email?.toLowerCase() || null;
+    try {
+      if (!adminEmail || !(await activeCampAdmin(adminEmail))) {
+        return respond({ error: "Admin access denied" }, 403);
+      }
+    } catch {
+      return respond({ error: "Admin directory temporarily unavailable" }, 503);
+    }
   }
 
   try {
@@ -97,8 +142,7 @@ Deno.serve(async (request: Request) => {
       const recipient = email(params.email);
       const ipFingerprint = str(params.ipFingerprint, 64);
       const emailFingerprint = str(params.emailFingerprint, 64);
-      if (!recipient || !ADMIN_EMAILS.has(recipient) ||
-          !SHA256.test(ipFingerprint) || !SHA256.test(emailFingerprint)) {
+      if (!recipient || !SHA256.test(ipFingerprint) || !SHA256.test(emailFingerprint)) {
         return respond({ error: "Recovery request not authorized" }, 403);
       }
       const { data: ipAllowed, error: ipError } = await db.rpc("camp_rise_again_claim_form_rate", {
@@ -111,15 +155,40 @@ Deno.serve(async (request: Request) => {
       });
       if (emailError) return respond({ error: "Recovery service unavailable" }, 503);
       if (!emailAllowed) return respond({ error: "Too many requests" }, 429);
+      // An unapproved address gets the same generic outward response.
+      if (!(await activeCampAdmin(recipient))) return respond({ approved: false });
+      const link = await adminActionLink(recipient);
+      return respond({ approved: true, ...link });
+    }
+    if (action === "generate_camp_signin_link") {
+      // Scoped to approved Camp admins; never expose token or accept arbitrary redirect.
+      // The Vercel caller verifies origin and sends the link through Resend.
+      const recipient = email(params.email);
+      const ipFingerprint = str(params.ipFingerprint, 64);
+      const emailFingerprint = str(params.emailFingerprint, 64);
+      if (!recipient || !SHA256.test(ipFingerprint) || !SHA256.test(emailFingerprint)) {
+        return respond({ error: "Sign-in request not authorized" }, 403);
+      }
+      const { data: ipAllowed, error: ipError } = await db.rpc("camp_rise_again_claim_form_rate", {
+        p_fingerprint: ipFingerprint, p_limit: 3, p_window_seconds: 900,
+      });
+      if (ipError) return respond({ error: "Sign-in service unavailable" }, 503);
+      if (!ipAllowed) return respond({ error: "Too many requests" }, 429);
+      const { data: emailAllowed, error: emailError } = await db.rpc("camp_rise_again_claim_form_rate", {
+        p_fingerprint: emailFingerprint, p_limit: 5, p_window_seconds: 3600,
+      });
+      if (emailError) return respond({ error: "Sign-in service unavailable" }, 503);
+      if (!emailAllowed) return respond({ error: "Too many requests" }, 429);
+      if (!(await activeCampAdmin(recipient))) return respond({approved:false});
       const { data, error } = await db.auth.admin.generateLink({
-        type: "recovery",
+        type: "magiclink",
         email: recipient,
-        options: { redirectTo: "https://campriseagain.org/admin/reset-password" },
+        options: { redirectTo: "https://campriseagain.org/admin" },
       });
       if (error || typeof data?.properties?.action_link !== "string") {
-        return respond({ error: "Unable to generate recovery link" }, 503);
+        return respond({ error: "Unable to generate sign-in link" }, 503);
       }
-      return respond({ actionLink: data.properties.action_link });
+      return respond({ approved:true, actionLink: data.properties.action_link });
     }
     if (action === "ping") {
       const { error } = await db.from("camp_rise_again_email_forwarders").select("id").limit(1);
@@ -192,6 +261,76 @@ Deno.serve(async (request: Request) => {
         .gt("verification_expires_at", new Date().toISOString())
         .select("id").maybeSingle();
       return error ? respond({ error: "Could not verify recipient" }, 503) : respond({ verified: !!data });
+    }
+    if (action === "admin_team_me") return respond({email: adminEmail});
+    if (action === "admin_team_list") {
+      const {data: admins, error} = await db.from(ADMINS_TABLE)
+        .select("email,enabled,is_protected,added_by,created_at,last_invited_at,revoked_at")
+        .order("created_at", {ascending:true}).limit(100);
+      if (error) return respond({error:"Could not list administrators"},503);
+      const users = await campAuthUsers();
+      const memberList = (admins||[]).map(a=>{
+        const u=users.find(row=>row.email?.toLowerCase()===a.email);
+        return {...a, account_status:
+          !u?"not_created":u.email_confirmed_at?"verified":"pending_confirmation"};
+      });
+      return respond({admins:memberList,email:adminEmail});
+    }
+    if (action === "admin_team_add") {
+      const target=email(params.email);
+      if (!target) return respond({error:"Enter a valid email"},400);
+      const {data: existing,error: readError} = await db.from(ADMINS_TABLE)
+        .select("email,enabled,is_protected").eq("email",target).maybeSingle();
+      if (readError) return respond({error:"Unable to check administrator"},503);
+      if (existing?.enabled) return respond({ok:true,alreadyActive:true,email:target});
+      const changes={enabled:true,revoked_at:null,updated_at:new Date().toISOString(),added_by:adminEmail};
+      const {error}=existing
+        ?await db.from(ADMINS_TABLE).update(changes).eq("email",target)
+        :await db.from(ADMINS_TABLE).insert({email:target,...changes});
+      if (error) return respond({error:"Could not save administrator"},503);
+      await db.from(ADMIN_AUDIT).insert({
+        action:existing?"restore":"add",actor_email:adminEmail,target_email:target,
+      });
+      return respond({ok:true,email:target});
+    }
+    if (action === "admin_team_revoke") {
+      const target=email(params.email);
+      if (!target) return respond({error:"Invalid account"},400);
+      if (target===adminEmail) return respond({error:"You cannot remove your own access"},409);
+      if (target===PROTECTED_ADMIN) return respond({error:"Primary recovery administrator cannot be removed"},403);
+      const {data,error:readError}=await db.from(ADMINS_TABLE)
+        .select("email,enabled,is_protected").eq("email",target).maybeSingle();
+      if (readError) return respond({error:"Could not check administrator"},503);
+      if (!data?.enabled) return respond({error:"Administrator is already inactive"},409);
+      if (data.is_protected) return respond({error:"Protected administrator"},403);
+      const {error}=await db.from(ADMINS_TABLE)
+        .update({enabled:false,revoked_at:new Date().toISOString(),updated_at:new Date().toISOString()})
+        .eq("email",target).eq("enabled",true);
+      if (error) return respond({error:"Could not revoke access"},503);
+      await db.from(ADMIN_AUDIT).insert({action:"revoke",actor_email:adminEmail,target_email:target});
+      // Do not delete the shared Supabase Auth account: CreatorHub may use it.
+      return respond({ok:true});
+    }
+    if (action === "admin_team_invite") {
+      const target=email(params.email),fingerprint=str(params.fingerprint,64);
+      if (!target || !SHA256.test(fingerprint)) return respond({error:"Invalid invite"},400);
+      if (!(await activeCampAdmin(target))) return respond({error:"Administrator is not active"},403);
+      const {data:allowed,error:rateError}=await db.rpc("camp_rise_again_claim_form_rate",{
+        p_fingerprint:fingerprint,p_limit:5,p_window_seconds:3600,
+      });
+      if (rateError) return respond({error:"Invitation rate limit unavailable"},503);
+      if (!allowed) return respond({error:"Too many invitations sent"},429);
+      const link=await adminActionLink(target);
+      return respond(link);
+    }
+    if (action === "admin_team_invite_sent") {
+      const target=email(params.email);
+      if (!target || !(await activeCampAdmin(target))) return respond({error:"Invalid administrator"},403);
+      const {error}=await db.from(ADMINS_TABLE)
+        .update({last_invited_at:new Date().toISOString()}).eq("email",target);
+      if(error) return respond({error:"Could not update invitation status"},503);
+      await db.from(ADMIN_AUDIT).insert({action:"invite_sent",actor_email:adminEmail,target_email:target});
+      return respond({ok:true});
     }
     if (action === "admin_list") {
       const { data, error } = await db.from("camp_rise_again_email_forwarders")
@@ -851,7 +990,6 @@ Deno.serve(async (request: Request) => {
       }
       return respond({ ok:true });
     }
-
 
     // CRM and outreach are strictly separated from private form answers.
     if (action === "mailing_request") {
