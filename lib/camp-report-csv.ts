@@ -1,8 +1,10 @@
-// Export an engagement contact list, not a full intake application.
-// Detailed personal information stays in the authenticated admin detail view.
+// Export a narrow engagement dataset rather than the full intake application.
+// Authorized admins explicitly requested CRM tags and private notes in CSV;
+// clinical details and other private intake free-text remain excluded.
 export const ENGAGEMENT_COLUMNS = [
   "kind","id","created_at","first_name","last_name","name","email",
   "phone","city","state","season_preference","volunteer_roles","topic",
+  "contact_tags","contact_notes",
 ] as const;
 
 export function csvCell(value: unknown): string {
@@ -31,4 +33,16 @@ export function buildEngagementCsv(submissions:Record<string,unknown>[]): string
     }).join(",")),
   ];
   return "\uFEFF"+lines.join("\r\n");
+}
+
+/** Private CRM export: contacts do not imply an application or mailing consent. */
+export const CONTACT_COLUMNS = [
+  "display_name","email","phone","stage","tags","notes","source_kinds","last_engaged_at",
+] as const;
+
+export function buildContactsCsv(contacts:Record<string,unknown>[]):string {
+  return "\uFEFF"+[
+    CONTACT_COLUMNS.map(csvCell).join(","),
+    ...contacts.map(item=>CONTACT_COLUMNS.map(field=>csvCell(item[field])).join(",")),
+  ].join("\r\n");
 }
