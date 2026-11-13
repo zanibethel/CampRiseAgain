@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   campPasswordRecoveryEmail, validCampRecoveryLink, CAMP_AUTH_FROM,
-  CAMP_RECOVERY_GENERIC_MESSAGE,
+  CAMP_RECOVERY_GENERIC_MESSAGE, campAdminInvitationEmail,
+  validCampInvitationLink,
 } from "../lib/camp-auth-email.ts";
 
 const good =
@@ -39,4 +40,20 @@ test("branded recovery email contains instructions, non-monitored notice, and co
 
 test("rejects broken links without rendering email", () => {
   assert.throws(()=>campPasswordRecoveryEmail("https://malicious.invalid/reset"),/Invalid Camp/);
+});
+
+test("first-time Camp admin invitation validates exact action, destination, and footer",()=>{
+  const invite=good.replace("type=recovery","type=invite");
+  assert.equal(validCampInvitationLink(invite),true);
+  assert.equal(validCampInvitationLink(good),false);
+  assert.equal(validCampInvitationLink(invite.replace("type=invite","type=magiclink")),false);
+  assert.equal(validCampInvitationLink(invite.replace(
+    "campriseagain.org%2Fadmin","evil.invalid%2Fadmin")),false);
+  const message=campAdminInvitationEmail(invite);
+  assert.match(message.subject,/create your admin password/i);
+  assert.ok(message.html.includes("Create Your Admin Password</a>"));
+  assert.ok(message.html.includes("This inbox is not monitored"));
+  assert.ok(message.text.includes(invite));
+  assert.ok(!message.html.includes(">"+invite+"<"));
+  assert.throws(()=>campAdminInvitationEmail(good),/Invalid/);
 });
