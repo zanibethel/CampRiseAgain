@@ -43,6 +43,7 @@ create index if not exists camp_mailing_status_idx on public.camp_rise_again_mai
 create table if not exists public.camp_rise_again_campaigns (
   id uuid primary key default gen_random_uuid(),
   kind text not null default 'announcement' check (kind in ('announcement','newsletter')),
+  purpose text not null default 'community' check (purpose in ('community','commercial')),
   subject text not null check (char_length(subject) between 3 and 150),
   body text not null check (char_length(body) between 10 and 12000),
   status text not null default 'draft' check (status in ('draft','sending','sent')),
@@ -139,6 +140,10 @@ begin
   values(normalized,source,new.id,new.created_at)
   on conflict(source_kind,source_id) do nothing;
   return new;
+exception when others then
+  -- A CRM indexing failure must never block the original sensitive camp intake.
+  raise warning 'Camp CRM capture skipped (SQLSTATE %)', sqlstate;
+  return new;
 end;
 $fn$;
 drop trigger if exists camp_capture_camper_crm on public.camp_rise_again_camper_applications;
@@ -197,7 +202,8 @@ grant usage,select on sequence public.camp_rise_again_crm_activity_id_seq to ser
 
 
 -- Admin-managed public footer details; no mailing address must be hard-coded
--- into Vercel environment variables. A blank row keeps campaign sends disabled.
+-- into Vercel environment variables. Commercial sends require a confirmed address;
+-- noncommercial outreach can proceed without one.
 create table if not exists public.camp_rise_again_mailing_settings (
   id smallint primary key default 1 check (id = 1),
   postal_address text not null default ''
@@ -216,4 +222,4 @@ alter table public.camp_rise_again_mailing_settings enable row level security;
 revoke all on table public.camp_rise_again_mailing_settings from public, anon, authenticated;
 grant select,insert,update on table public.camp_rise_again_mailing_settings to service_role;
 comment on table public.camp_rise_again_mailing_settings is
-  'Private admin-managed organization mailing address; marketing send blocked until confirmed.';
+  'Private admin-managed postal address; commercial promotions require a confirmed valid address.';
