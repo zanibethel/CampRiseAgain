@@ -22,11 +22,16 @@ test("all Camp admin gates retain existing and allow newly approved addresses", 
   }
 });
 
-test("only new authorized admins can create a login on first email-link sign-in", () => {
-  const source = read("app/admin/page.tsx");
-  assert.match(source, /const NEW_CAMP_ADMINS = new Set\(/);
-  assert.match(source, /shouldCreateUser: NEW_CAMP_ADMINS\.has\(normalized\)/);
-  assert.match(source, /const normalized = authorizedEmail\(\)/);
+test("approved new admins use Camp's protected branded sign-in endpoint", () => {
+  const browser = read("app/admin/page.tsx");
+  assert.ok(browser.includes('fetch("/api/admin/request-sign-in-link"'));
+  assert.ok(!browser.includes("auth.signInWithOtp"));
+  const api = read("app/api/admin/request-sign-in-link/route.ts");
+  for (const email of admins) assert.ok(api.includes(email), "Missing approved admin: " + email);
+  assert.ok(api.includes("generate_camp_signin_link"));
+  const bridge = read("supabase/functions/camp-email-bridge/index.ts");
+  assert.ok(bridge.includes('type: "magiclink"'));
+  assert.ok(bridge.includes("ADMIN_EMAILS.has(recipient)"));
 });
 
 test("forwarding additions remain inactive until mailbox verification", () => {
