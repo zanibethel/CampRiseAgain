@@ -14,7 +14,7 @@ const goodLink="https://yufptpfiwdbzzrvhkvux.supabase.co/auth/v1/verify?"+
   "token=one-time-opaque-token&type=recovery&redirect_to="+
   encodeURIComponent("https://campriseagain.org/admin/reset-password");
 
-function loadRoute({rateLimited=false,badLink=false,sendFailure=false,bridgeUnavailable=false,linkType="recovery"}={}) {
+function loadRoute({rateLimited=false,badLink=false,sendFailure=false,bridgeUnavailable=false,linkType="recovery",approved=true}={}) {
   const sent=[];const bridges=[];
   class MockCampBridgeError extends Error {
     constructor(message,status){super(message);this.status=status;}
@@ -28,7 +28,7 @@ function loadRoute({rateLimited=false,badLink=false,sendFailure=false,bridgeUnav
         if(bridgeUnavailable)throw new MockCampBridgeError("Bridge unavailable",503);
         const validLink=linkType==="invite"
           ?goodLink.replace("type=recovery","type=invite"):goodLink;
-        return {actionLink:badLink?"https://evil.example/reset":validLink,linkType};
+        return {actionLink:badLink?"https://evil.example/reset":validLink,linkType,approved};
       },
     },
     "resend":{Resend:class Resend {
@@ -103,6 +103,15 @@ test("unexpected link action is rejected without sending",async()=>{
   const response=await r.post(request());
   assert.equal(response.status,503);
   assert.equal(r.sent.length,0);
+});
+
+test("unapproved email receives only a generic response with no email delivery",async()=>{
+  const r=loadRoute({approved:false});
+  const res=await r.post(request("someone@unknown.example"));
+  assert.equal(res.status,200);
+  assert.equal(r.bridges.length,1);
+  assert.equal(r.sent.length,0);
+  assert.ok(!JSON.stringify(await res.json()).includes("token"));
 });
 
 test("foreign origin cannot request a recovery link",async()=>{
