@@ -14,6 +14,7 @@ import CampCRMAdmin from "@/components/CampCRMAdmin";
 import FAQAdmin from "@/components/FAQAdmin";
 import PastCampsAdmin from "@/components/PastCampsAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { normalizedCampAdminEmail } from "@/lib/camp-admin-email-validation";
 
 
 type AdminSection = "crm" | "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "admins" | "submissions" | "faq" | "past-camps";
@@ -146,8 +147,8 @@ export default function AdminPage() {
   }, [supabase, userEmail]);
 
   function authorizedEmail() {
-    const normalized = email.trim().toLowerCase();
-    if (!/^[^@\\s<>]+@[^@\\s<>]+\\.[^@\\s<>]+$/.test(normalized) || normalized.length>254) {
+    const normalized = normalizedCampAdminEmail(email);
+    if (!normalized) {
       setStatus("Enter a valid email address.");
       return null;
     }
