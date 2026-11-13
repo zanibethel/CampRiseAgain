@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import TeamAdmin from "@/components/TeamAdmin";
 
-const ADMINS = ["schofieldtierra@gmail.com", "zanibethel@gmail.com"];
+const ADMINS = ["schofieldtierra@gmail.com", "zanibethel@gmail.com", "matthias.quellenberg@gmail.com", "james.campriseagain@gmail.com"];
 
 export default function AdminTeamGate() {
   const pathname = usePathname();
