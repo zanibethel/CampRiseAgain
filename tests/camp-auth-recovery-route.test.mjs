@@ -70,6 +70,9 @@ test("authorized request uses the private Edge bridge, delivers branding, and ne
   assert.equal(r.sent[0].from,"Camp Rise Again Support <support@campriseagain.org>");
   assert.ok(r.sent[0].text.includes("This inbox is not monitored"));
   assert.ok(r.sent[0].text.includes(goodLink));
+  assert.match(r.sent[0].html,/>Click here to reset<\\/a>/);
+  assert.ok(r.sent[0].html.includes('href="' + goodLink.replaceAll("&", "&amp;") + '"'));
+  assert.ok(!r.sent[0].html.includes(">" + goodLink + "<"));
   assert.ok(!JSON.stringify(body).includes("token"));
   assert.equal(r.bridges.length,1);
   assert.equal(r.bridges[0].action,"generate_camp_recovery_link");
