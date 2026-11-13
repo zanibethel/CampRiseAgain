@@ -30,6 +30,10 @@ test("branded recovery email contains instructions, non-monitored notice, and co
   assert.match(result.text,/https:\/\/campriseagain\.org/);
   assert.match(result.text,/If you did not request this/);
   assert.ok(result.text.includes(good));
+  assert.ok(result.html.includes(">Click here to reset</a>"));
+  assert.ok(result.html.includes('href="' + good.replaceAll("&", "&amp;") + '"'));
+  assert.ok(!result.html.includes(">" + good + "<"));
+  assert.match(result.html,/This inbox is not monitored/);
   assert.ok(!CAMP_RECOVERY_GENERIC_MESSAGE.includes("an-opaque-one-time-token"));
 });
 
