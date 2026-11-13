@@ -194,3 +194,26 @@ revoke all on function public.camp_rise_again_capture_crm() from public,anon,aut
 revoke all on function public.camp_rise_again_claim_campaign_batch(uuid,integer) from public,anon,authenticated;
 grant execute on function public.camp_rise_again_claim_campaign_batch(uuid,integer) to service_role;
 grant usage,select on sequence public.camp_rise_again_crm_activity_id_seq to service_role;
+
+
+-- Admin-managed public footer details; no mailing address must be hard-coded
+-- into Vercel environment variables. A blank row keeps campaign sends disabled.
+create table if not exists public.camp_rise_again_mailing_settings (
+  id smallint primary key default 1 check (id = 1),
+  postal_address text not null default ''
+    check (char_length(postal_address) <= 500),
+  address_confirmed boolean not null default false,
+  updated_at timestamptz not null default now(),
+  updated_by text not null default '',
+  constraint camp_mailing_settings_address_required
+    check (not address_confirmed or char_length(btrim(postal_address)) between 10 and 500)
+);
+insert into public.camp_rise_again_mailing_settings
+  (id,postal_address,address_confirmed)
+values (1,'',false)
+on conflict (id) do nothing;
+alter table public.camp_rise_again_mailing_settings enable row level security;
+revoke all on table public.camp_rise_again_mailing_settings from public, anon, authenticated;
+grant select,insert,update on table public.camp_rise_again_mailing_settings to service_role;
+comment on table public.camp_rise_again_mailing_settings is
+  'Private admin-managed organization mailing address; marketing send blocked until confirmed.';
