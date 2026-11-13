@@ -7,14 +7,16 @@ import TeamAdmin from "@/components/TeamAdmin";
 import MemorialGalleryAdmin from "@/components/MemorialGalleryAdmin";
 import VisitorAnalyticsAdmin from "@/components/VisitorAnalyticsAdmin";
 import EmailForwardingAdmin from "@/components/EmailForwardingAdmin";
+import AdminManagement from "@/components/AdminManagement";
+import {campAdminAllowed} from "@/lib/camp-admin-access";
 import SubmissionsAdmin from "@/components/SubmissionsAdmin";
 import CampCRMAdmin from "@/components/CampCRMAdmin";
 import FAQAdmin from "@/components/FAQAdmin";
 import PastCampsAdmin from "@/components/PastCampsAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
-const ADMINS = ["schofieldtierra@gmail.com", "zanibethel@gmail.com"];
-type AdminSection = "crm" | "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "submissions" | "faq" | "past-camps";
+
+type AdminSection = "crm" | "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "admins" | "submissions" | "faq" | "past-camps";
 
 type ResourceItem = {
   id: number;
@@ -59,9 +61,15 @@ export default function AdminPage() {
         const { data, error } = await supabase.auth.getUser();
         if (!active) return;
         const current = data.user?.email?.toLowerCase() || "";
-        setUserEmail(ADMINS.includes(current) ? current : "");
+        const {data:sessionData}=await supabase.auth.getSession();
+        const allowed=!!current && !!sessionData.session?.access_token &&
+          await campAdminAllowed(sessionData.session.access_token);
+        if (!active) return;
+        setUserEmail(allowed ? current : "");
         if (error && error.name !== "AuthSessionMissingError") {
           setStatus("Your sign-in could not be restored. Try a fresh email sign-in link.");
+        } else if (current && !allowed) {
+          setStatus("This account does not currently have Camp Rise Again administrator access.");
         } else {
           setStatus("");
         }
@@ -73,10 +81,16 @@ export default function AdminPage() {
         setLoading(false);
 
         // Do not perform async requests inside this callback.
+        let authRevision=0;
         const { data } = supabase.auth.onAuthStateChange((_event, session) => {
           if (!active) return;
-          const current = session?.user?.email?.toLowerCase() || "";
-          setUserEmail(ADMINS.includes(current) ? current : "");
+          const revision=++authRevision;
+          const current=session?.user?.email?.toLowerCase()||"";
+          if (!current || !session?.access_token) {setUserEmail("");return;}
+          // Async access checks run after the synchronous auth listener returns.
+          void campAdminAllowed(session.access_token).then(allowed=>{
+            if (active && revision===authRevision) setUserEmail(allowed?current:"");
+          });
         });
         unsubscribe = () => data.subscription.unsubscribe();
       }
@@ -133,8 +147,8 @@ export default function AdminPage() {
 
   function authorizedEmail() {
     const normalized = email.trim().toLowerCase();
-    if (!ADMINS.includes(normalized)) {
-      setStatus("Only authorized Camp Rise Again administrators can use this login.");
+    if (!/^[^@\\s<>]+@[^@\\s<>]+\\.[^@\\s<>]+$/.test(normalized) || normalized.length>254) {
+      setStatus("Enter a valid email address.");
       return null;
     }
     return normalized;
@@ -158,8 +172,8 @@ export default function AdminPage() {
         return;
       }
       const signedInEmail = data.user?.email?.toLowerCase() || "";
-      if (!ADMINS.includes(signedInEmail)) {
-        await supabase.auth.signOut();
+      if (!data.session?.access_token || !(await campAdminAllowed(data.session.access_token))) {
+        await supabase.auth.signOut({scope:"local"});
         setStatus("This account is not authorized to administer Camp Rise Again.");
         return;
       }
@@ -174,21 +188,28 @@ export default function AdminPage() {
   }
 
   async function sendLogin() {
-    if (!supabase || authBusy) return;
+    if (authBusy) return;
     const normalized = authorizedEmail();
     if (!normalized) return;
 
     setAuthBusy(true);
     setStatus("Sending secure sign-in link…");
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: normalized,
-        options: {
-          emailRedirectTo: `${window.location.origin}/admin`,
-          shouldCreateUser: false,
-        },
+      const response = await fetch("/api/admin/request-sign-in-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalized }),
+        cache: "no-store",
       });
-      setStatus(error ? "Unable to send the sign-in email. Please try again shortly." : "Check your email for a secure sign-in link. Open it in this browser if possible. Older links cannot be reused.");
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setStatus(response.status === 429
+          ? "Too many requests. Try again later."
+          : "Unable to send the sign-in email. Please try again shortly.");
+        return;
+      }
+      setStatus(typeof result.message === "string" ? result.message :
+        "Check your email for a secure Camp Rise Again sign-in link. Open it in this browser if possible.");
     } catch {
       setStatus("Could not request a sign-in link. Please try again.");
     } finally {
@@ -348,10 +369,11 @@ export default function AdminPage() {
   }
 
   const tabs: { id: AdminSection; label: string; description: string }[] = [
-    { id: "crm", label: "Contacts & Announcements", description: "CRM, newsletter drafts, opt-in subscribers and delivery" },
     { id: "analytics", label: "Visitor Analytics", description: "Visitors, page views, trends, and top pages" },
     { id: "email", label: "Email Forwarding", description: "Gmail forwarding recipients and reply signatures" },
+    { id: "admins", label: "Admin Management", description: "Invite teammates, check access, and resend or remove accounts" },
     { id: "submissions", label: "Form Submissions", description: "Review camper, volunteer and contact forms privately" },
+    { id: "crm", label: "Contacts & Announcements", description: "CRM, newsletters and opt-in subscribers" },
     { id: "home", label: "Home Page", description: "Sections, logo, copy, and display order" },
     { id: "memorial", label: "Michael’s Photos", description: "Upload, arrange, and caption his story photos" },
     { id: "resources", label: "Resources Page", description: "Support links and display order" },
@@ -369,10 +391,11 @@ export default function AdminPage() {
       <div className="actions" style={{ marginBottom: 24 }}><a className="btn btn-primary" href="/" target="_blank" rel="noreferrer">Preview Site ↗</a><button className="btn btn-secondary" type="button" onClick={signOut}>Sign Out</button></div>
 
       <div id="admin-section-content" style={{ scrollMarginTop: 20 }}>
-      {activeSection === "crm" && <CampCRMAdmin />}
       {activeSection === "analytics" && <VisitorAnalyticsAdmin />}
       {activeSection === "email" && <EmailForwardingAdmin />}
+      {activeSection === "admins" && <AdminManagement />}
       {activeSection === "submissions" && <SubmissionsAdmin />}
+      {activeSection === "crm" && <CampCRMAdmin />}
       {activeSection === "faq" && <FAQAdmin />}
       {activeSection === "past-camps" && <PastCampsAdmin />}
       {activeSection === "home" && <HomeAdmin />}
