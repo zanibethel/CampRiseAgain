@@ -12,7 +12,7 @@ create table if not exists public.camp_rise_again_admin_accounts (
   last_invited_at timestamptz,
   revoked_at timestamptz,
   constraint camp_admin_email_valid check (email = lower(trim(email))
-    and length(email) between 5 and 254 and email ~ '^[^[:space:]@]+@[^[:space:]@]+\\.[^[:space:]@]+$')
+    and length(email) between 5 and 254 and email ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$')
 );
 alter table public.camp_rise_again_admin_accounts enable row level security;
 revoke all on public.camp_rise_again_admin_accounts from public, anon, authenticated;
