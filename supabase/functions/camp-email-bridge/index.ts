@@ -222,6 +222,76 @@ Deno.serve(async (request: Request) => {
       return error ? respond({ error: "Could not remove recipient" }, 503) : respond({ ok: true });
     }
 
+
+    // Form field definitions are private; the public endpoint exposes only
+    // active questions, never submission records or staff configuration.
+    if (action === "get_form_fields") {
+      const kind = str(params.kind, 20);
+      if (!["camper","volunteer"].includes(kind)) return respond({ error:"Unknown form" },400);
+      const { data, error } = await db.from("camp_rise_again_form_fields")
+        .select("field_key,label,input_type,choices,required,sort_order,after_field")
+        .eq("form_kind",kind).eq("active",true)
+        .order("sort_order",{ascending:true}).order("created_at",{ascending:true}).limit(30);
+      return error ? respond({error:"Questions unavailable"},503) : respond({fields:data || []});
+    }
+    if (action === "admin_field_list") {
+      const { data, error } = await db.from("camp_rise_again_form_fields")
+        .select("id,form_kind,field_key,label,input_type,choices,required,active,sort_order,after_field,updated_at")
+        .order("form_kind").order("sort_order").order("created_at");
+      return error ? respond({error:"Unable to load questions"},503) : respond({fields:data || []});
+    }
+    if (action === "admin_field_create" || action === "admin_field_update") {
+      const kind = str(params.form_kind,20);
+      const label = str(params.label,160);
+      const inputType = str(params.input_type,24);
+      const types = ["short_text","long_text","select","multi_select","checkbox"];
+      const selectable = inputType === "select" || inputType === "multi_select";
+      const rawChoices = params.choices;
+      const choices = Array.isArray(rawChoices) ? rawChoices.map(x=>str(x,100)).filter(Boolean) : [];
+      const isRequired = params.required === true;
+      const active = params.active !== false;
+      const order = Number.isInteger(params.sort_order) ? Number(params.sort_order) : 100;
+      if (!["camper","volunteer"].includes(kind) || label.length < 3 ||
+          !types.includes(inputType) || choices.length > 20 ||
+          new Set(choices).size !== choices.length ||
+          (selectable && choices.length < 2) || (!selectable && choices.length > 0) ||
+          order < 0 || order > 100000) return respond({error:"Invalid question configuration"},400);
+      const change = { form_kind:kind, label, input_type:inputType,
+        choices, required:isRequired, active, sort_order:order, updated_at:new Date().toISOString() };
+      if (action === "admin_field_create") {
+        const key = str(params.field_key,48);
+        const anchor = str(params.after_field,48);
+        if (!/^[a-z][a-z0-9_]{1,47}$/.test(key)) return respond({error:"Question key must be lowercase letters, digits or underscores"},400);
+        const fixed = kind === "camper"
+          ? ["firstName","lastName","email","phone","address1","address2","city","state",
+            "postalCode","dateOfBirth","shirtSize","season","notes"]
+          : ["firstName","lastName","email","phone","season","roles","notes"];
+        if (!anchor || anchor === key) return respond({error:"Choose where the question should appear"},400);
+        if (!fixed.includes(anchor)) {
+          const {data:parent,error:parentError} = await db.from("camp_rise_again_form_fields")
+            .select("id").eq("form_kind",kind).eq("field_key",anchor).maybeSingle();
+          if (parentError || !parent) return respond({error:"Position not found. Refresh the form editor."},409);
+        }
+        const {count,error:countError} = await db.from("camp_rise_again_form_fields")
+          .select("id",{head:true,count:"exact"}).eq("form_kind",kind);
+        if (countError) return respond({error:"Cannot verify question limit"},503);
+        if ((count || 0) >= 25) return respond({error:"Maximum 25 questions per form"},400);
+        const { data, error } = await db.from("camp_rise_again_form_fields")
+          .insert({...change,field_key:key,after_field:anchor}).select("*").single();
+        return error ? respond({error:error.code === "23505" ? "Question key already exists" : "Unable to create question"},error.code === "23505" ? 409:503)
+          : respond({field:data});
+      }
+      const id = str(params.id,64);
+      const updatedAt = str(params.updated_at,80);
+      if (!UUID.test(id) || !updatedAt) return respond({error:"Question reference required"},400);
+      const { data, error } = await db.from("camp_rise_again_form_fields")
+        .update(change).eq("id",id).eq("form_kind",kind).eq("updated_at",updatedAt)
+        .select("*").maybeSingle();
+      return error ? respond({error:"Unable to update question"},503)
+        : data ? respond({field:data})
+        : respond({error:"Question changed elsewhere; refresh to avoid overwriting edits"},409);
+    }
+
     // Website submissions: validate on the server, throttle by irreversible
     // HMAC fingerprint, and save only to private RLS-protected tables.
     if (action === "submit_form") {
@@ -286,6 +356,48 @@ Deno.serve(async (request: Request) => {
         }
       }
 
+
+      // Validate optional, admin-defined answers against current active
+      // questions. Unknown keys are ignored to support forms open during edits.
+      if (kind !== "contact") {
+        const { data: questions, error: questionError } = await db
+          .from("camp_rise_again_form_fields")
+          .select("field_key,input_type,choices,required").eq("form_kind",kind)
+          .eq("active",true).limit(30);
+        if (questionError) return respond({error:"Questions unavailable"},503);
+        const supplied = fields.extraAnswers && typeof fields.extraAnswers === "object" &&
+          !Array.isArray(fields.extraAnswers) ? fields.extraAnswers as Json : {};
+        const answers: Json = {};
+        for (const q of questions || []) {
+          const value = supplied[q.field_key];
+          const blank = value === null || value === undefined || value === "" ||
+            (Array.isArray(value) && value.length === 0);
+          if (blank) {
+            if (q.required) return respond({error:"Please complete all required questions"},400);
+            continue;
+          }
+          if (q.input_type === "checkbox") {
+            if (typeof value !== "boolean" || (q.required && value !== true)) return respond({error:"Invalid checkbox answer"},400);
+            answers[q.field_key] = value;
+          } else if (q.input_type === "select") {
+            if (typeof value !== "string" || !(q.choices as string[]).includes(value))
+              return respond({error:"Invalid selected answer"},400);
+            answers[q.field_key] = value;
+          } else if (q.input_type === "multi_select") {
+            if (!Array.isArray(value) || value.length > 20 ||
+                value.some(x=>typeof x !== "string" || !(q.choices as string[]).includes(x)))
+              return respond({error:"Invalid multiple-choice answer"},400);
+            answers[q.field_key] = [...new Set(value)];
+          } else if (q.input_type === "short_text" || q.input_type === "long_text") {
+            const max = q.input_type === "short_text" ? 200 : 1000;
+            if (typeof value !== "string" || value.trim().length > max)
+              return respond({error:"Question answer exceeds length limit"},400);
+            if (value.trim()) answers[q.field_key] = value.trim();
+          }
+        }
+        record.extra_answers = answers;
+      }
+
       // Do not send a website notification if a duplicate retry was already saved.
       const { data: exists, error: lookupError } = await db.from(table)
         .select("id").eq("id", requestId).maybeSingle();
@@ -319,6 +431,72 @@ Deno.serve(async (request: Request) => {
       records.sort((a,b) => String(b.created_at).localeCompare(String(a.created_at)));
       return respond({ submissions: records.slice(0,100) });
     }
+
+    if (action === "admin_form_report") {
+      const day30 = new Date(Date.now()-30*86400000).toISOString();
+      const definitions = [
+        ["camper","camp_rise_again_camper_applications"],
+        ["volunteer","camp_rise_again_volunteer_applications"],
+        ["contact","camp_rise_again_contact_messages"],
+      ];
+      const counts: Json = {};
+      for (const [kind,table] of definitions) {
+        const [all,recent] = await Promise.all([
+          db.from(table).select("id",{head:true,count:"exact"}),
+          db.from(table).select("id",{head:true,count:"exact"}).gte("created_at",day30),
+        ]);
+        if (all.error || recent.error) return respond({error:"Unable to summarize engagement"},503);
+        counts[kind] = {total:all.count || 0,last30Days:recent.count || 0};
+      }
+      const {data: volunteers,error:roleError} = await db.from("camp_rise_again_volunteer_applications")
+        .select("volunteer_roles,season_preference,extra_answers").order("created_at",{ascending:false}).limit(1000);
+      const {data: campers,error:seasonError} = await db.from("camp_rise_again_camper_applications")
+        .select("season_preference,extra_answers").order("created_at",{ascending:false}).limit(1000);
+      if (roleError || seasonError) return respond({error:"Unable to summarize preferences"},503);
+      const roleCounts: Record<string,number> = {};
+      const seasonCounts: Record<string,number> = {};
+      const sourceCounts: Record<string,number> = {};
+      const trackSource = (row: {extra_answers?:{how_heard?:unknown}}) => {
+        const source = row.extra_answers?.how_heard;
+        if (typeof source === "string" && source.length <= 100) sourceCounts[source] = (sourceCounts[source] || 0)+1;
+      };
+      for (const row of volunteers || []) {
+        trackSource(row);
+        for (const role of row.volunteer_roles || []) roleCounts[role] = (roleCounts[role] || 0)+1;
+        const key = "volunteer:" + row.season_preference;
+        seasonCounts[key] = (seasonCounts[key] || 0)+1;
+      }
+      for (const row of campers || []) {
+        trackSource(row);
+        const key = "camper:" + row.season_preference;
+        seasonCounts[key] = (seasonCounts[key] || 0)+1;
+      }
+      return respond({counts,roleCounts,seasonCounts,sourceCounts,
+        preferencesSampled:(counts.camper as Json).total !== (campers || []).length ||
+          (counts.volunteer as Json).total !== (volunteers || []).length});
+    }
+    if (action === "admin_export_submissions") {
+      const kind = str(params.kind,20);
+      if (!["all","camper","volunteer","contact"].includes(kind))
+        return respond({error:"Unknown export filter"},400);
+      const defs = [
+        ["camper","camp_rise_again_camper_applications"],
+        ["volunteer","camp_rise_again_volunteer_applications"],
+        ["contact","camp_rise_again_contact_messages"],
+      ].filter(([k])=>kind==="all" || k===kind);
+      const submissions: Json[] = [];
+      let truncated = false;
+      for (const [k,table] of defs) {
+        const {data,error,count} = await db.from(table).select("*",{count:"exact"})
+          .order("created_at",{ascending:false}).range(0,999);
+        if (error) return respond({error:"Unable to export records"},503);
+        if ((count || 0)>1000) truncated = true;
+        for (const row of data || []) submissions.push({...row,kind:k});
+      }
+      submissions.sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
+      return respond({submissions,truncated});
+    }
+
     if (action === "admin_get_submission") {
       const kind = str(params.kind, 20);
       const id = str(params.id, 64);
