@@ -72,9 +72,9 @@ export async function POST(request: Request) {
       "generate_camp_recovery_link",
       {email,ipFingerprint,emailFingerprint},
     );
-    const {subject,text}=campPasswordRecoveryEmail(actionLink);
+    const {subject,text,html}=campPasswordRecoveryEmail(actionLink);
     const {error:sendError}=await new Resend(resendKey).emails.send({
-      from:CAMP_AUTH_FROM,to:[email],subject,text,
+      from:CAMP_AUTH_FROM,to:[email],subject,text,html,
     });
     if(sendError) {
       console.error("[camp-auth] Recovery delivery failed:",sendError.name);
