@@ -8,10 +8,22 @@ type Forwarder = {
   inboxes: string[]; enabled: boolean; verified_at: string | null;
 };
 const inboxes = [
-  { id: "info", label: "General inquiries" },
-  { id: "volunteer", label: "Volunteers" },
-  { id: "forms", label: "Website forms" },
+  { id: "info", label: "General inquiries", address: "info@campriseagain.org" },
+  { id: "volunteer", label: "Volunteers", address: "volunteer@campriseagain.org" },
+  { id: "forms", label: "Website forms", address: "forms@campriseagain.org" },
 ];
+
+// Responsive labels keep the mailbox readable alongside its friendly name.
+function InboxLabel({ label, address }: { label: string; address: string }) {
+  return (
+    <span style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 8, rowGap: 2, minWidth: 0 }}>
+      <span>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 500, opacity: 0.8, overflowWrap: "anywhere" }}>
+        {address}
+      </span>
+    </span>
+  );
+}
 const initial = { email: "", display_name: "", title: "", inboxes: ["info", "volunteer", "forms"] };
 
 export default function EmailForwardingAdmin() {
@@ -162,7 +174,7 @@ export default function EmailForwardingAdmin() {
                         ? item.inboxes.filter(x => x !== box.id)
                         : [...item.inboxes, box.id],
                     })} />
-                  {box.label}
+                  <InboxLabel label={box.label} address={box.address} />
                 </label>
               ))}
             </div>
@@ -209,7 +221,7 @@ export default function EmailForwardingAdmin() {
           <legend>Choose inboxes</legend>
           <div className="checks">{inboxes.map(box => (
             <label key={box.id}><input type="checkbox" checked={newForwarder.inboxes.includes(box.id)}
-              onChange={() => toggleNew(box.id)} />{box.label}</label>
+              onChange={() => toggleNew(box.id)} /><InboxLabel label={box.label} address={box.address} /></label>
           ))}</div>
         </fieldset>
         <button className="btn btn-primary" type="submit"
