@@ -856,14 +856,20 @@ Deno.serve(async (request: Request) => {
     // CRM and outreach are strictly separated from private form answers.
     if (action === "mailing_request") {
       const addr=email(params.email), name=str(params.name,120);
-      const hash=str(params.verification_hash,64), fingerprint=str(params.fingerprint,64);
-      if (!addr || !SHA256.test(hash) || !SHA256.test(fingerprint))
+      const hash=str(params.verification_hash,64), fingerprint=str(params.fingerprint,64),
+        emailFingerprint=str(params.email_fingerprint,64);
+      if (!addr || !SHA256.test(hash) || !SHA256.test(fingerprint) || !SHA256.test(emailFingerprint))
         return respond({error:"Invalid subscription request"},400);
       const {data:allowed,error:rateError}=await db.rpc("camp_rise_again_claim_form_rate",{
         p_fingerprint:fingerprint,p_limit:3,p_window_seconds:3600,
       });
       if (rateError) return respond({error:"Subscription service unavailable"},503);
       if (!allowed) return respond({error:"Please try again later"},429);
+      const {data:allowedEmail,error:emailRateError}=await db.rpc("camp_rise_again_claim_form_rate",{
+        p_fingerprint:emailFingerprint,p_limit:2,p_window_seconds:3600,
+      });
+      if(emailRateError)return respond({error:"Subscription service unavailable"},503);
+      if(!allowedEmail)return respond({error:"Please try again later"},429);
       const {data:existing,error:readError}=await db.from("camp_rise_again_mailing_subscribers")
         .select("status").eq("email",addr).maybeSingle();
       if (readError) return respond({error:"Subscription service unavailable"},503);
@@ -1003,6 +1009,24 @@ Deno.serve(async (request: Request) => {
       return error?respond({error:"Unable to claim deliveries"},503):
         respond({emails:(data||[]).map((x:{recipient_email:string})=>x.recipient_email)});
     }
+
+    if (action === "admin_campaign_eligible") {
+      const addr=email(params.email);
+      if(!addr)return respond({error:"Invalid recipient"},400);
+      const {data,error}=await db.from("camp_rise_again_mailing_subscribers")
+        .select("status").eq("email",addr).maybeSingle();
+      if(error)return respond({error:"Unable to check subscriber consent"},503);
+      return respond({eligible:data?.status==="subscribed"});
+    }
+    if (action === "admin_campaign_suppress") {
+      const id=str(params.id,64),addr=email(params.email);
+      if(!UUID.test(id)||!addr)return respond({error:"Invalid delivery"},400);
+      const {error}=await db.from("camp_rise_again_campaign_deliveries")
+        .update({status:"skipped",error_code:"subscriber_opted_out"})
+        .eq("campaign_id",id).eq("email",addr).eq("status","sending");
+      return error?respond({error:"Unable to suppress delivery"},503):respond({ok:true});
+    }
+
     if (action === "admin_campaign_result") {
       const id=str(params.id,64),addr=email(params.email);
       const delivered=params.delivered===true;
