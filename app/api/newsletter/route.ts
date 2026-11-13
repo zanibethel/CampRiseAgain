@@ -41,10 +41,11 @@ export async function POST(request: Request) {
       const hash=createHash("sha256").update(rawToken).digest("hex");
       const ip=(request.headers.get("x-vercel-forwarded-for") || request.headers.get("x-forwarded-for") || "unknown")
         .split(",")[0].trim().slice(0,100);
-      const fingerprint=createHmac("sha256",signKey).update("camp:newsletter:"+ip+":"+email).digest("hex");
+      const fingerprint=createHmac("sha256",signKey).update("camp:newsletter-ip:"+ip).digest("hex");
+      const emailFingerprint=createHmac("sha256",signKey).update("camp:newsletter-email:"+email).digest("hex");
       const result=await campBridge<{ok:boolean;send:boolean}>("mailing_request",{
         email,name:typeof input.name==="string"?input.name.trim().slice(0,120):"",
-        verification_hash:hash,fingerprint,
+        verification_hash:hash,fingerprint,email_fingerprint:emailFingerprint,
       });
       if(result.send){
         const url=CAMP_MAILING_SITE+"/newsletter?mode=confirm&email="+encodeURIComponent(email)+
