@@ -852,6 +852,200 @@ Deno.serve(async (request: Request) => {
       return respond({ ok:true });
     }
 
+
+    // CRM and outreach are strictly separated from private form answers.
+    if (action === "mailing_request") {
+      const addr=email(params.email), name=str(params.name,120);
+      const hash=str(params.verification_hash,64), fingerprint=str(params.fingerprint,64);
+      if (!addr || !SHA256.test(hash) || !SHA256.test(fingerprint))
+        return respond({error:"Invalid subscription request"},400);
+      const {data:allowed,error:rateError}=await db.rpc("camp_rise_again_claim_form_rate",{
+        p_fingerprint:fingerprint,p_limit:3,p_window_seconds:3600,
+      });
+      if (rateError) return respond({error:"Subscription service unavailable"},503);
+      if (!allowed) return respond({error:"Please try again later"},429);
+      const {data:existing,error:readError}=await db.from("camp_rise_again_mailing_subscribers")
+        .select("status").eq("email",addr).maybeSingle();
+      if (readError) return respond({error:"Subscription service unavailable"},503);
+      if (existing?.status==="subscribed") return respond({ok:true,send:false});
+      const {error:contactError}=await db.from("camp_rise_again_crm_contacts")
+        .upsert({email:addr,display_name:name},{onConflict:"email",ignoreDuplicates:true});
+      if (contactError) return respond({error:"Subscription service unavailable"},503);
+      const {error:saveError}=await db.from("camp_rise_again_mailing_subscribers")
+        .upsert({email:addr,status:"pending",verification_hash:hash,
+          verification_sent_at:new Date().toISOString(),source:"newsletter",
+          updated_at:new Date().toISOString()},{onConflict:"email"});
+      return saveError?respond({error:"Subscription service unavailable"},503)
+        :respond({ok:true,send:true});
+    }
+    if (action === "mailing_confirm") {
+      const addr=email(params.email),hash=str(params.verification_hash,64);
+      if (!addr || !SHA256.test(hash)) return respond({error:"Invalid confirmation link"},400);
+      const {data,error}=await db.from("camp_rise_again_mailing_subscribers")
+        .update({status:"subscribed",verification_hash:null,consent_at:new Date().toISOString(),
+          unsubscribed_at:null,updated_at:new Date().toISOString()})
+        .eq("email",addr).eq("status","pending").eq("verification_hash",hash)
+        .gte("verification_sent_at",new Date(Date.now()-48*3600000).toISOString())
+        .select("email").maybeSingle();
+      if (error) return respond({error:"Confirmation unavailable"},503);
+      return data?respond({ok:true}):respond({error:"Link expired or already used. Subscribe again."},410);
+    }
+    if (action === "mailing_unsubscribe") {
+      // The Vercel route checks a recipient-specific HMAC link before this action.
+      const addr=email(params.email);
+      if (!addr) return respond({error:"Invalid email"},400);
+      const {error}=await db.from("camp_rise_again_mailing_subscribers")
+        .update({status:"unsubscribed",verification_hash:null,
+          unsubscribed_at:new Date().toISOString(),updated_at:new Date().toISOString()})
+        .eq("email",addr);
+      return error?respond({error:"Unable to unsubscribe"},503):respond({ok:true});
+    }
+    if (action === "admin_crm_list") {
+      const {data,error}=await db.from("camp_rise_again_crm_contacts")
+        .select("email,display_name,phone,source_kinds,stage,tags,notes,last_engaged_at,created_at,updated_at")
+        .order("last_engaged_at",{ascending:false,nullsFirst:false}).limit(500);
+      if(error)return respond({error:"Unable to load contacts"},503);
+      const emails=(data||[]).map(c=>c.email);
+      let subscriptionRows:Json[]=[];
+      if(emails.length){
+        const subscription=await db.from("camp_rise_again_mailing_subscribers")
+          .select("email,status,consent_at").in("email",emails);
+        if(subscription.error)return respond({error:"Unable to load mailing preferences"},503);
+        subscriptionRows=subscription.data||[];
+      }
+      const preferences=new Map(subscriptionRows.map(x=>[x.email,x]));
+      const contacts=(data||[]).map(c=>({...c,
+        mailing_status:preferences.get(c.email)?.status || "not_subscribed",
+      }));
+      const {count,error:countError}=await db.from("camp_rise_again_crm_contacts")
+        .select("email",{head:true,count:"exact"});
+      if(countError)return respond({error:"Unable to count contacts"},503);
+      return respond({contacts,total:count||0,truncated:(count||0)>500});
+    }
+    if (action === "admin_crm_add") {
+      const addr=email(params.email), name=str(params.display_name,160),phone=str(params.phone,40);
+      if(!addr || !name)return respond({error:"Name and valid email required"},400);
+      const {data,error}=await db.from("camp_rise_again_crm_contacts")
+        .insert({email:addr,display_name:name,phone,source_kinds:["manual"],stage:"new"})
+        .select("email").single();
+      return error?respond({error:error.code==="23505"?"Contact already exists":"Unable to add contact"},
+        error.code==="23505"?409:503):respond({contact:data});
+    }
+    if (action === "admin_crm_update") {
+      const addr=email(params.email),name=str(params.display_name,160),phone=str(params.phone,40),
+        stage=str(params.stage,20),notes=str(params.notes,1000);
+      const tags=params.tags;
+      if(!addr || !name || !["new","follow_up","active","alumni","archived"].includes(stage) ||
+        !Array.isArray(tags) || tags.length>12 ||
+        tags.some(x=>typeof x!=="string" || x.trim().length<1 || x.trim().length>30))
+        return respond({error:"Invalid contact details"},400);
+      const {data,error}=await db.from("camp_rise_again_crm_contacts").update({
+        display_name:name,phone,stage,notes,tags:[...new Set(tags.map(x=>x.trim()))],
+        updated_at:new Date().toISOString(),
+      }).eq("email",addr).select("email").maybeSingle();
+      return error?respond({error:"Unable to update contact"},503):
+        data?respond({ok:true}):respond({error:"Contact not found"},404);
+    }
+    if (action === "admin_campaign_list") {
+      const [campaigns,mailing]=await Promise.all([
+        db.from("camp_rise_again_campaigns")
+          .select("id,kind,subject,body,status,created_at,updated_at,created_by,completed_at")
+          .order("created_at",{ascending:false}).limit(100),
+        db.from("camp_rise_again_mailing_subscribers")
+          .select("email",{head:true,count:"exact"}).eq("status","subscribed"),
+      ]);
+      if(campaigns.error || mailing.error)return respond({error:"Unable to load campaigns"},503);
+      return respond({campaigns:campaigns.data||[],subscribers:mailing.count||0});
+    }
+    if (action === "admin_campaign_save") {
+      const id=str(params.id,64),kind=str(params.kind,20),subject=str(params.subject,150),
+        body=str(params.body,12000);
+      if(!["announcement","newsletter"].includes(kind) || subject.length<3 ||
+        body.length<10 || body.length>12000)return respond({error:"Complete the announcement"},400);
+      if(id){
+        if(!UUID.test(id))return respond({error:"Invalid campaign"},400);
+        const {data,error}=await db.from("camp_rise_again_campaigns")
+          .update({kind,subject,body,updated_at:new Date().toISOString()})
+          .eq("id",id).eq("status","draft").select("id").maybeSingle();
+        return error?respond({error:"Unable to save draft"},503):
+          data?respond({id:data.id}):respond({error:"Only drafts can be edited"},409);
+      }
+      const {data,error}=await db.from("camp_rise_again_campaigns")
+        .insert({kind,subject,body,status:"draft",created_by:adminEmail})
+        .select("id").single();
+      return error?respond({error:"Unable to save draft"},503):respond({id:data.id});
+    }
+    if (action === "admin_campaign_begin") {
+      const id=str(params.id,64);
+      if(!UUID.test(id))return respond({error:"Invalid campaign"},400);
+      const {data:recipients,error:mailError}=await db.from("camp_rise_again_mailing_subscribers")
+        .select("email").eq("status","subscribed").order("email").limit(501);
+      if(mailError)return respond({error:"Unable to verify subscribers"},503);
+      if(!recipients?.length)return respond({error:"No confirmed subscribers yet"},409);
+      if(recipients.length>500)return respond({error:"Campaigns currently support up to 500 confirmed subscribers"},409);
+      const {data:campaign,error:statusError}=await db.from("camp_rise_again_campaigns")
+        .update({status:"sending",updated_at:new Date().toISOString()})
+        .eq("id",id).eq("status","draft").select("id").maybeSingle();
+      if(statusError)return respond({error:"Unable to queue campaign"},503);
+      if(!campaign)return respond({error:"Campaign was already started. Refresh first."},409);
+      const {error:queueError}=await db.from("camp_rise_again_campaign_deliveries")
+        .insert(recipients.map(x=>({campaign_id:id,email:x.email,status:"pending"})));
+      if(queueError){
+        await db.from("camp_rise_again_campaigns").update({status:"draft"}).eq("id",id).eq("status","sending");
+        return respond({error:"Unable to create campaign delivery queue"},503);
+      }
+      return respond({ok:true,queued:recipients.length});
+    }
+    if (action === "admin_campaign_claim") {
+      const id=str(params.id,64);
+      if(!UUID.test(id))return respond({error:"Invalid campaign"},400);
+      const {data,error}=await db.rpc("camp_rise_again_claim_campaign_batch",{p_campaign_id:id,p_limit:10});
+      return error?respond({error:"Unable to claim deliveries"},503):
+        respond({emails:(data||[]).map((x:{recipient_email:string})=>x.recipient_email)});
+    }
+    if (action === "admin_campaign_result") {
+      const id=str(params.id,64),addr=email(params.email);
+      const delivered=params.delivered===true;
+      if(!UUID.test(id)||!addr || typeof params.delivered!=="boolean")
+        return respond({error:"Invalid delivery"},400);
+      const {data,error}=await db.from("camp_rise_again_campaign_deliveries")
+        .update({status:delivered?"sent":"failed",
+          sent_at:delivered?new Date().toISOString():null,
+          provider_id:delivered?str(params.provider_id,160):null,
+          error_code:delivered?null:str(params.error_code,120)})
+        .eq("campaign_id",id).eq("email",addr).eq("status","sending")
+        .select("email").maybeSingle();
+      return error?respond({error:"Unable to record delivery"},503):
+        data?respond({ok:true}):respond({error:"Delivery no longer claimed"},409);
+    }
+    if (action === "admin_campaign_progress") {
+      const id=str(params.id,64);
+      if(!UUID.test(id))return respond({error:"Invalid campaign"},400);
+      const {data:rows,error}=await db.from("camp_rise_again_campaign_deliveries")
+        .select("email,status").eq("campaign_id",id).limit(501);
+      if(error)return respond({error:"Unable to read progress"},503);
+      // A recipient can opt out while a campaign is queued.
+      const pending=(rows||[]).filter(x=>x.status==="pending");
+      if(pending.length){
+        const {data:confirmed}=await db.from("camp_rise_again_mailing_subscribers")
+          .select("email").eq("status","subscribed").in("email",pending.map(x=>x.email));
+        const subscribed=new Set((confirmed||[]).map(x=>x.email));
+        const skipped=pending.filter(x=>!subscribed.has(x.email)).map(x=>x.email);
+        if(skipped.length)await db.from("camp_rise_again_campaign_deliveries")
+          .update({status:"skipped"}).eq("campaign_id",id).eq("status","pending").in("email",skipped);
+      }
+      const counts:Json={pending:0,sending:0,sent:0,failed:0,skipped:0};
+      const {data:updated}=await db.from("camp_rise_again_campaign_deliveries")
+        .select("status").eq("campaign_id",id).limit(501);
+      for(const item of updated||[])counts[item.status]=Number(counts[item.status]||0)+1;
+      const outstanding=Number(counts.pending)+Number(counts.sending);
+      if(outstanding===0 && (updated||[]).length>0)
+        await db.from("camp_rise_again_campaigns").update({
+          status:"sent",completed_at:new Date().toISOString(),
+        }).eq("id",id).eq("status","sending");
+      return respond({counts,remaining:outstanding,completed:outstanding===0});
+    }
+
     return respond({ error: "Unsupported action" }, 400);
   } catch {
     return respond({ error: "Private database operation failed" }, 503);
