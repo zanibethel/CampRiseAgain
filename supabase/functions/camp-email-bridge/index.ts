@@ -976,7 +976,7 @@ Deno.serve(async (request: Request) => {
     if (action === "admin_campaign_list") {
       const [campaigns,mailing,settings]=await Promise.all([
         db.from("camp_rise_again_campaigns")
-          .select("id,kind,subject,body,status,created_at,updated_at,created_by,completed_at")
+          .select("id,kind,purpose,subject,body,status,created_at,updated_at,created_by,completed_at")
           .order("created_at",{ascending:false}).limit(100),
         db.from("camp_rise_again_mailing_subscribers")
           .select("email",{head:true,count:"exact"}).eq("status","subscribed"),
@@ -992,31 +992,40 @@ Deno.serve(async (request: Request) => {
         mailing_settings:settings.data,mailing_ready:mailingReady});
     }
     if (action === "admin_campaign_save") {
-      const id=str(params.id,64),kind=str(params.kind,20),subject=str(params.subject,150),
-        body=str(params.body,12000);
-      if(!["announcement","newsletter"].includes(kind) || subject.length<3 ||
+      const id=str(params.id,64),kind=str(params.kind,20),purpose=str(params.purpose,20),
+        subject=str(params.subject,150),body=str(params.body,12000);
+      if(!["announcement","newsletter"].includes(kind) ||
+        !["community","commercial"].includes(purpose) || subject.length<3 ||
         body.length<10 || typeof params.body!=="string" || params.body.length>12000)return respond({error:"Complete the announcement"},400);
       if(id){
         if(!UUID.test(id))return respond({error:"Invalid campaign"},400);
         const {data,error}=await db.from("camp_rise_again_campaigns")
-          .update({kind,subject,body,updated_at:new Date().toISOString()})
+          .update({kind,purpose,subject,body,updated_at:new Date().toISOString()})
           .eq("id",id).eq("status","draft").select("id").maybeSingle();
         return error?respond({error:"Unable to save draft"},503):
           data?respond({id:data.id}):respond({error:"Only drafts can be edited"},409);
       }
       const {data,error}=await db.from("camp_rise_again_campaigns")
-        .insert({kind,subject,body,status:"draft",created_by:adminEmail})
+        .insert({kind,purpose,subject,body,status:"draft",created_by:adminEmail})
         .select("id").single();
       return error?respond({error:"Unable to save draft"},503):respond({id:data.id});
     }
     if (action === "admin_campaign_begin") {
       const id=str(params.id,64);
       if(!UUID.test(id))return respond({error:"Invalid campaign"},400);
-      const {data:settings,error:settingsError}=await db.from("camp_rise_again_mailing_settings")
-        .select("postal_address,address_confirmed").eq("id",1).maybeSingle();
-      if(settingsError)return respond({error:"Unable to check mailing settings"},503);
-      if(!settings?.address_confirmed || settings.postal_address.trim().length<10)
-        return respond({error:"Complete and confirm the mailing address in the admin portal before sending."},409);
+      const {data:reviewed,error:reviewError}=await db.from("camp_rise_again_campaigns")
+        .select("purpose,status").eq("id",id).maybeSingle();
+      if(reviewError || !reviewed)return respond({error:"Unable to review campaign"},503);
+      if(reviewed.status!=="draft")return respond({error:"Campaign already started"},409);
+      if(reviewed.purpose==="community" && params.noncommercial_reviewed!==true)
+        return respond({error:"Confirm the announcement is noncommercial before sending."},409);
+      if(reviewed.purpose==="commercial"){
+        const {data:settings,error:settingsError}=await db.from("camp_rise_again_mailing_settings")
+          .select("postal_address,address_confirmed").eq("id",1).maybeSingle();
+        if(settingsError)return respond({error:"Unable to check mailing settings"},503);
+        if(!settings?.address_confirmed || settings.postal_address.trim().length<10)
+          return respond({error:"A confirmed organization postal address is required for commercial promotions."},409);
+      }
       const {data:recipients,error:mailError}=await db.from("camp_rise_again_mailing_subscribers")
         .select("email").eq("status","subscribed").order("email").limit(501);
       if(mailError)return respond({error:"Unable to verify subscribers"},503);
@@ -1038,11 +1047,17 @@ Deno.serve(async (request: Request) => {
     if (action === "admin_campaign_claim") {
       const id=str(params.id,64);
       if(!UUID.test(id))return respond({error:"Invalid campaign"},400);
-      const {data:settings,error:settingsError}=await db.from("camp_rise_again_mailing_settings")
-        .select("postal_address,address_confirmed").eq("id",1).maybeSingle();
-      if(settingsError)return respond({error:"Unable to check mailing settings"},503);
-      if(!settings?.address_confirmed || settings.postal_address.trim().length<10)
-        return respond({error:"Complete and confirm the mailing address in the admin portal before sending."},409);
+      const {data:campaign,error:lookupError}=await db.from("camp_rise_again_campaigns")
+        .select("purpose,status").eq("id",id).maybeSingle();
+      if(lookupError || !campaign)return respond({error:"Unable to verify campaign"},503);
+      if(campaign.status!=="sending")return respond({error:"Campaign must be started first."},409);
+      if(campaign.purpose==="commercial"){
+        const {data:settings,error:settingsError}=await db.from("camp_rise_again_mailing_settings")
+          .select("postal_address,address_confirmed").eq("id",1).maybeSingle();
+        if(settingsError)return respond({error:"Unable to check mailing settings"},503);
+        if(!settings?.address_confirmed || settings.postal_address.trim().length<10)
+          return respond({error:"A confirmed postal address is required before sending commercial promotions."},409);
+      }
       const {data,error}=await db.rpc("camp_rise_again_claim_campaign_batch",{p_campaign_id:id,p_limit:10});
       return error?respond({error:"Unable to claim deliveries"},503):
         respond({emails:(data||[]).map((x:{recipient_email:string})=>x.recipient_email)});
