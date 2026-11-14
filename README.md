@@ -85,3 +85,7 @@ New recipients must click a 24-hour verification link and explicitly submit the 
 - Existing forwarding recipients keep all of their original inboxes. Additional records are created pending consent: volunteer@campriseagain.org to matthias.quellenberg@gmail.com, and info@campriseagain.org to james.campriseagain@gmail.com.
 - In `/admin` > **Email Forwarding**, an existing admin chooses **Send Verification** for each pending recipient. Forwarding becomes active only after that recipient follows the email link and submits the confirmation page. This is intentional and prevents forwarding confidential messages to an unconfirmed Gmail mailbox.
 - SQL policies for Camp tables and only Camp-associated Storage policies are extended; CreatorHub policies are untouched. The Camp Supabase Edge bridge's protected admin and recovery allowlists must be deployed alongside the site code.
+
+## Future storefront and payment plan
+
+Planning only: see [CRA storefront, Stripe account separation, inclusive 5% processing/operating fee, supplier integration, and donation handling](docs/future-storefront-stripe-plan.md). No payments or storefront have been enabled by this documentation.
