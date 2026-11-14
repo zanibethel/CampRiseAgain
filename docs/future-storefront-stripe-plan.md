@@ -5,6 +5,10 @@
 **Site:** https://campriseagain.org  
 **Purpose:** Preserve the agreed commercial model and a future integration plan for CRA's merchandise, digital content, and fundraising.
 
+## Cost comparison and possible future pricing review
+
+A separate [storefront cost comparison and fee scenario reference](storefront-cost-comparison-2026-11-14.md) records the November 14, 2026 discussion of third-party storefronts and **$10,000–$20,000 in expected annual retail sales**. It compares **5%, 6%, 8%, and 10% all-inclusive fees** after illustrative Stripe card processing. **8% was suggested as a potential future proposal, not adopted.** The original **5% baseline** remains unchanged until explicitly approved. Re-check vendor prices and actual Connect fees at implementation time.
+
 ## Decisions to preserve
 
 1. **Separate CRA Stripe account.** Camp Rise Again will have its own Stripe account and payout destination, rather than running sales and donations through the existing Cooperative account. Where Stripe allows, the accounts may be managed using the same owner's login, but their balances, transaction records, and payouts must remain separate.
