@@ -88,4 +88,4 @@ New recipients must click a 24-hour verification link and explicitly submit the 
 
 ## Future storefront and payment plan
 
-Planning only: see [CRA storefront, Stripe account separation, inclusive 5% processing/operating fee, supplier integration, and donation handling](docs/future-storefront-stripe-plan.md). No payments or storefront have been enabled by this documentation.
+Planning only: see [CRA storefront, Stripe account separation, inclusive 5% processing/operating fee, supplier integration, and donation handling](docs/future-storefront-stripe-plan.md). No payments or storefront have been enabled by this documentation. For the historical [external storefront price comparison and 5%–10% annual fee scenarios](docs/storefront-cost-comparison-2026-11-14.md), see the separate planning reference; **8% is a proposal, not a changed rate**.
