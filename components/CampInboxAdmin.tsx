@@ -41,9 +41,10 @@ async function mailRequest(method:"GET"|"POST"|"PATCH",query:Record<string,strin
   if(!result.ok)throw new Error(json.error||"Mail request failed.");
   return json;
 }
-export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
+export default function CampInboxAdmin({initialTo="",initialContact=""}:{initialTo?:string;initialContact?:string}) {
   const [box,setBox]=useState<Box>("info");
   const [folder,setFolder]=useState<Folder>("inbox");
+  const [contact,setContact]=useState(initialContact);
   const [threads,setThreads]=useState<Thread[]>([]);
   const [hasMore,setHasMore]=useState(false);
   const [active,setActive]=useState<Thread|null>(null);
@@ -60,9 +61,9 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
   const [status,setStatus]=useState("");
   const [filter,setFilter]=useState("");
 
-  const loadThreads=useCallback(async(nextBox:Box,nextFolder:Folder,cursor?:string)=>{
+  const loadThreads=useCallback(async(nextBox:Box,nextFolder:Folder,cursor?:string,contactEmail="")=>{
     const result=await mailRequest("GET",{view:"threads",inbox:nextBox,folder:nextFolder,
-      ...(cursor?{after:cursor}:{})});
+      ...(cursor?{after:cursor}:{}),...(contactEmail?{contact:contactEmail}:{})});
     const entries=Array.isArray(result.data)?result.data as Thread[]:[];
     setThreads(old=>cursor?[...old,...entries.filter(item=>!old.some(x=>x.id===item.id))]:entries);
     setHasMore(Boolean(result.has_more));
@@ -73,11 +74,11 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
     let current=true;
     setBusy(true);setStatus("");
     setActive(null);setMessage(null);setMessages([]);
-    void loadThreads(box,folder).catch(error=>{
+    void loadThreads(box,folder,undefined,contact).catch(error=>{
       if(current)setStatus(error instanceof Error?error.message:"Inbox unavailable.");
     }).finally(()=>{if(current)setBusy(false);});
     return()=>{current=false;};
-  },[box,folder,loadThreads]);
+  },[box,folder,contact,loadThreads]);
 
   const shown=useMemo(()=>threads.filter(t=>[t.subject,t.from,...(t.to||[])]
     .some(v=>String(v||"").toLowerCase().includes(filter.trim().toLowerCase()))),[threads,filter]);
@@ -126,7 +127,7 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
         subject:subject.trim(),text:cleanBody,requestId:crypto.randomUUID()});
       setCompose(false);setBody("");setSubject("");
       setStatus("Email accepted by Resend. Check Sent for the conversation.");
-      await loadThreads(box,folder);
+      await loadThreads(box,folder,undefined,contact);
     }catch(error){setStatus(error instanceof Error?error.message:"Email not sent.");}
     finally{setBusy(false);}
   }
@@ -143,7 +144,7 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
       setReply("");setStatus("Reply accepted by Resend.");
       const result=await mailRequest("GET",{view:"thread",inbox:box,thread:active.id});
       setMessages(Array.isArray(result.emails)?result.emails:[]);
-      await loadThreads(box,folder);
+      await loadThreads(box,folder,undefined,contact);
     }catch(error){setStatus(error instanceof Error?error.message:"Reply was not sent.");}
     finally{setBusy(false);}
   }
@@ -153,7 +154,7 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
     try{
       await mailRequest("PATCH",{}, {inbox:box,thread:active.id,folder:active.folder==="archive"?"inbox":"archive"});
       setActive(null);setMessages([]);setMessage(null);
-      await loadThreads(box,folder);
+      await loadThreads(box,folder,undefined,contact);
       setStatus("Conversation updated.");
     }catch(error){setStatus(error instanceof Error?error.message:"Could not update conversation.");}
     finally{setBusy(false);}
@@ -168,13 +169,16 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
         onClick={()=>{setBox(item.id);setCompose(false);}} disabled={busy}>{item.name}</button>)}
     </div>
     <p className="section-copy">Mailbox: <strong>{currentAddress}</strong></p>
+    {contact&&<p className="section-copy"><strong>Contact history:</strong> {contact} · Search includes inbox, sent and archived messages for this mailbox (results can lag by about a minute).
+      <button type="button" className="btn btn-secondary" style={{marginLeft:12}} onClick={()=>{setContact("");setFilter("");}}>Show All Mail</button>
+    </p>}
     <div className="actions" style={{margin:"12px 0",gap:8,flexWrap:"wrap"}}>
-      {folders.map(f=><button type="button" key={f.id}
+      {!contact&&folders.map(f=><button type="button" key={f.id}
         className={"btn "+(folder===f.id?"btn-primary":"btn-secondary")}
         onClick={()=>{setFolder(f.id);setCompose(false);}} disabled={busy}>{f.label}</button>)}
       <button className="btn btn-secondary" type="button" onClick={()=>startCompose()}>+ Compose</button>
       <button className="btn btn-secondary" type="button" disabled={busy}
-        onClick={()=>{setBusy(true);void loadThreads(box,folder).catch(error=>setStatus(String(error)))
+        onClick={()=>{setBusy(true);void loadThreads(box,folder,undefined,contact).catch(error=>setStatus(String(error)))
           .finally(()=>setBusy(false));}}>Refresh</button>
     </div>
     {sender&&<p className="section-copy">Signed in as {sender}. Outgoing signature: <strong style={{whiteSpace:"pre-line"}}>{signature}</strong></p>}
@@ -245,7 +249,7 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
         {!shown.length&&<p className="section-copy">{busy?"Loading conversations…":"No matching conversations in this folder."}</p>}
       </div>
       {hasMore&&Boolean(threads.length)&&<button type="button" className="btn btn-secondary" disabled={busy}
-        onClick={()=>{setBusy(true);void loadThreads(box,folder,threads[threads.length-1].id)
+        onClick={()=>{setBusy(true);void loadThreads(box,folder,threads[threads.length-1].id,contact)
           .catch(error=>setStatus(String(error))).finally(()=>setBusy(false));}}>Load More</button>}
     </>}
   </section>;
