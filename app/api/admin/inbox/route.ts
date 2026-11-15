@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { campBridge, CampBridgeError } from "@/lib/camp-supabase-bridge";
 import { CAMP_INBOXES, parseAddress, safeSubject } from "@/lib/camp-email-helpers";
+import { campAdminEmailHtml, campMailFallbackLogo } from "@/lib/camp-admin-email-html";
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +49,19 @@ async function authorize(req: Request) {
       ? [own.display_name.trim(), own.title?.trim()].filter(Boolean).join("\n")
       : "Camp Rise Again Team",
   };
+}
+async function currentCampLogoUrl(): Promise<string> {
+  // Read the same public logo setting used by the website, with its public key;
+  // never expose the private Camp mail key or the Supabase bridge credential.
+  try {
+    const supabase = getSupabaseBrowserClient();
+    const { data, error } = await supabase.from("site_settings").select("logo_path").eq("id", 1).maybeSingle();
+    if (!error && typeof data?.logo_path === "string" &&
+        /^[a-z\d\/_-]+\.(?:png|jpe?g|webp)$/i.test(data.logo_path)) {
+      return supabase.storage.from("camp-rise-again-branding").getPublicUrl(data.logo_path).data.publicUrl;
+    }
+  } catch { /* Email should still deliver using the bundled site logo. */ }
+  return campMailFallbackLogo();
 }
 function providerKey() {
   const key = process.env.CAMP_RESEND_API_KEY;
@@ -123,10 +138,11 @@ export async function GET(req: Request) {
       const message = id(url.searchParams.get("message"));
       if (!message) return response({ error: "Choose a valid message." }, 400);
       const m = await resend(pathFor(inbox, thread, message));
-      // Display plain text only. Untrusted inbound HTML is NEVER inserted into the admin DOM.
+      // HTML is rendered only inside a sandboxed, script-disabled iframe in the client.
       return response({
         id: m.id, from: m.from, to: m.to, reply_to: m.reply_to, subject: m.subject, direction: m.direction,
         received_at: m.received_at, text: typeof m.text === "string" ? m.text.slice(0, 50000) : "",
+        html: typeof m.html === "string" ? m.html.slice(0, 100000) : "",
         attachments: Array.isArray(m.attachments) ? m.attachments.map((a: unknown) => {
           const value = a && typeof a === "object" ? a as Json : {};
           return { filename: value.filename, size: value.size };
@@ -169,6 +185,7 @@ export async function POST(req: Request) {
       return response({ error: "A message and request ID are required." }, 400);
     // A real user confirmation in the admin UI precedes every send.
     const signed = text + "\n\n" + admin.signature;
+    const html = campAdminEmailHtml(text, admin.signature, await currentCampLogoUrl());
     const action = input.action;
     if (action === "reply") {
       const thread = id(input.thread);
@@ -178,7 +195,7 @@ export async function POST(req: Request) {
       if (original.direction !== "inbound" || !parseAddress(original.from))
         return response({ error: "Reply to an incoming message, not an outgoing message." }, 400);
       return response(await resend(pathFor(inbox, thread, message) + "/reply", "POST",
-        { text: signed, reply_all: false }, "camp-admin-reply:" + requestId));
+        { text: signed, html, reply_all: false }, "camp-admin-reply:" + requestId));
     }
     if (action === "new") {
       const recipient = parseAddress(input.to);
@@ -188,7 +205,7 @@ export async function POST(req: Request) {
       // Create an inbox draft first, then send: this keeps the outgoing email in Resend's
       // Sent folder so later responses appear in the same thread.
       const created = await resend(pathFor(inbox) + "/drafts", "POST",
-        { to: [recipient], subject: safeSubject(subject), text: signed }, "camp-admin-draft:" + requestId);
+        { to: [recipient], subject: safeSubject(subject), text: signed, html }, "camp-admin-draft:" + requestId);
       const draft = id(created.id);
       if (!draft) throw new Error("Provider did not return a draft identifier");
       try {
