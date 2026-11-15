@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { Resend } from "resend";
 import { campBridge } from "@/lib/camp-supabase-bridge";
+import { campAdminEmailHtml } from "@/lib/camp-admin-email-html";
+import { currentCampLogoUrl } from "@/lib/camp-email-branding";
 import {
   CAMP_INBOXES, inboxFromId, isAutoResponse, mailReplyRoute,
   newReplyText, parseAddress, replySignature, safeSubject,
@@ -48,6 +50,7 @@ async function handleInboxEmail(
   const message = newReplyText(received.text || "").slice(0, 20000) || "(This message has no plain-text body; view the original in the Resend inbox.)";
   const subject = safeSubject(received.subject);
   const address = CAMP_INBOXES[inbox];
+  const logoUrl = await currentCampLogoUrl();
   for (const staff of (forwarders || []) as Forwarder[]) {
     if (!staff.inboxes.includes(inbox) || parseAddress(staff.email) === originalSender) continue;
     const { routeId } = await campBridge<{ routeId: string }>("upsert_route", {
@@ -76,6 +79,7 @@ async function handleInboxEmail(
       replyTo: replyAlias,
       subject: "[Camp Rise Again / " + inbox + "] " + subject,
       text: forwardText,
+      html: campAdminEmailHtml(forwardText, "Camp Rise Again Team", logoUrl),
     }, {
       idempotencyKey: "camp-forward:" + createHash("sha256").update(data.email_id + ":" + staff.id).digest("hex"),
     });
@@ -124,6 +128,7 @@ async function handleStaffReply(
     replyTo: target.inbox_address,
     subject: "Re: " + safeSubject(target.original_subject).replace(/^Re:\s*/i, ""),
     text: replyBody,
+    html: campAdminEmailHtml(reply, signature, await currentCampLogoUrl()),
     headers,
   }, {
     idempotencyKey: "camp-reply:" + createHash("sha256").update(emailId).digest("hex"),
