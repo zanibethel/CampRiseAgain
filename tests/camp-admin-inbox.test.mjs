@@ -4,6 +4,8 @@ import test from "node:test";
 import { campAdminEmailHtml, campMailFallbackLogo } from "../lib/camp-admin-email-html.ts";
 
 const api=readFileSync(new URL("../app/api/admin/inbox/route.ts",import.meta.url),"utf8");
+const webhook=readFileSync(new URL("../app/api/webhooks/camp-email/route.ts",import.meta.url),"utf8");
+const branding=readFileSync(new URL("../lib/camp-email-branding.ts",import.meta.url),"utf8");
 const ui=readFileSync(new URL("../components/CampInboxAdmin.tsx",import.meta.url),"utf8");
 const admin=readFileSync(new URL("../app/admin/page.tsx",import.meta.url),"utf8");
 const crm=readFileSync(new URL("../components/CampCRMAdmin.tsx",import.meta.url),"utf8");
@@ -39,8 +41,17 @@ test("all admin replies and new drafts send both safe HTML and plain text",()=>{
   assert.match(api,/campAdminEmailHtml\(text, admin\.signature/);
   assert.match(api,/\{ text: signed, html, reply_all: false \}/);
   assert.match(api,/text: signed, html \}/);
-  assert.match(api,/select\("logo_path"\)/);
-  assert.match(api,/camp-rise-again-branding/);
+  assert.match(branding,/select\("logo_path"\)/);
+  assert.match(branding,/camp-rise-again-branding/);
+  assert.match(api,/currentCampLogoUrl/);
+});
+test("Gmail forwarding copies and staff replies retain their plain text and gain branded HTML",()=>{
+  assert.match(webhook,/html: campAdminEmailHtml\(forwardText, "Camp Rise Again Team", logoUrl\)/);
+  assert.match(webhook,/html: campAdminEmailHtml\(reply, signature, await currentCampLogoUrl\(\)\)/);
+  assert.match(webhook,/text: replyBody/);
+  assert.match(webhook,/text: forwardText/);
+  assert.match(webhook,/camp-forward:/);
+  assert.match(webhook,/camp-reply:/);
 });
 test("HTML email escapes untrusted message and signature text, preserving paragraphs",()=>{
   const html=campAdminEmailHtml('<script>alert("hello")</script>\n\nHello & goodbye','Zac <Support>\nCamp Team','https://campriseagain.org/logo.png');
