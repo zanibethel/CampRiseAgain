@@ -11,7 +11,7 @@ type Thread = {
 };
 type Mail = {
   id: string; from: string; to?: string[]; reply_to?: string[] | string; subject?: string; direction: string;
-  received_at?: string; text?: string; attachments?: {filename?: string;size?: number}[];
+  received_at?: string; text?: string; html?: string; attachments?: {filename?: string;size?: number}[];
 };
 const boxes: {id:Box;name:string;address:string}[] = [
   {id:"info",name:"General",address:"info@campriseagain.org"},
@@ -50,6 +50,8 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
   const [active,setActive]=useState<Thread|null>(null);
   const [messages,setMessages]=useState<Mail[]>([]);
   const [message,setMessage]=useState<Mail|null>(null);
+  const [showHtml,setShowHtml]=useState(true);
+  const [loadRemoteImages,setLoadRemoteImages]=useState(false);
   const [signature,setSignature]=useState("Camp Rise Again Team");
   const [sender,setSender]=useState("");
   const [compose,setCompose]=useState(Boolean(initialTo));
@@ -91,6 +93,17 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
     ? (Array.isArray(replyTarget.reply_to) ? replyTarget.reply_to.join(", ") : replyTarget.reply_to)||replyTarget.from
     : "";
   const currentAddress=boxes.find(b=>b.id===box)?.address||"info@campriseagain.org";
+  // Keep received HTML in an opaque sandboxed document, not in the admin DOM.
+  // Remote images are disabled by default because opening them tracks the reader.
+  const htmlPreview=useMemo(()=>{
+    if(!message?.html)return "";
+    const csp="default-src 'none'; script-src 'none'; object-src 'none'; "+
+      "style-src 'unsafe-inline'; img-src "+(loadRemoteImages?"https: data:":"data:")+"; "+
+      "font-src 'none'; media-src 'none'; frame-src 'none'; connect-src 'none'; "+
+      "form-action 'none'; base-uri 'none';";
+    return '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="'+
+      csp+'"><body style="margin:12px;font-family:Arial,Helvetica,sans-serif;">'+message.html+"</body>";
+  },[message?.html,loadRemoteImages]);
 
   async function openThread(t:Thread) {
     setActive(t);setCompose(false);setMessage(null);setMessages([]);setReply("");
@@ -113,6 +126,8 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
     try{
       const m=await mailRequest("GET",{view:"message",inbox:box,thread:threadId,message:messageId}) as Mail;
       setMessage(m);
+      setShowHtml(Boolean(m.html));
+      setLoadRemoteImages(false);
     }catch(error){setStatus(error instanceof Error?error.message:"Could not read message.");}
   }
   function startCompose(to="") {
@@ -213,7 +228,7 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
       <div className="field"><label htmlFor="camp-compose-body">Message</label>
         <textarea id="camp-compose-body" required rows={9} maxLength={12000} value={body}
           onChange={event=>{setBody(event.target.value);composeRequest.current=null;setSendUncertain(false);}}/></div>
-      <p className="section-copy">Your sender signature is added automatically. This is a direct operational email, not a newsletter blast.</p>
+      <p className="section-copy">Your Camp Rise Again logo, branded HTML layout and sender signature are added automatically, with a plain-text version for email clients that need it. This is a direct operational email, not a newsletter blast.</p>
       <div className="actions"><button className="btn btn-primary" disabled={busy||sendUncertain}>Review &amp; Send</button>
         <button className="btn btn-secondary" type="button" onClick={()=>setCompose(false)}>Cancel</button></div>
     </form>:active?<div className="card">
@@ -224,7 +239,7 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
         </button>
       </div>
       <h3>{active.subject||"(No subject)"}</h3>
-      <p className="section-copy">Select a message to read it. Plain text is shown without executing email HTML or links.</p>
+      <p className="section-copy">Select a message to read it. HTML messages open in a protected viewer. Scripts, forms and links are disabled; external images only load if you choose to allow them.</p>
       <div style={{display:"grid",gap:8,marginBottom:20}}>
         {messages.map(m=><button type="button" className="card" key={m.id}
           onClick={()=>void openMessage(active.id,m.id)}
@@ -237,9 +252,23 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
         <strong>From: {message.from}</strong>
         <div style={{overflowWrap:"anywhere",fontSize:13,marginTop:4}}>To: {(message.to||[]).join(", ")}</div>
         <div style={{marginTop:4,fontSize:13,opacity:.75}}>{dateLabel(message.received_at)}</div>
-        <div style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",marginTop:16}}>
-          {message.text||"(No plain-text content; open the original message in Resend to view HTML.)"}
-        </div>
+        {Boolean(message.html)&&<div className="actions" style={{marginTop:14,gap:8,flexWrap:"wrap"}}>
+          <button type="button" className={"btn "+(showHtml?"btn-primary":"btn-secondary")}
+            onClick={()=>setShowHtml(true)}>View HTML</button>
+          <button type="button" className={"btn "+(!showHtml?"btn-primary":"btn-secondary")}
+            onClick={()=>setShowHtml(false)}>View Plain Text</button>
+          {showHtml&&<button type="button" className="btn btn-secondary"
+            onClick={()=>setLoadRemoteImages(!loadRemoteImages)}>
+            {loadRemoteImages?"Block Remote Images":"Load Remote Images"}
+          </button>}
+        </div>}
+        {showHtml&&Boolean(message.html)?
+          <iframe title="Protected email HTML preview" sandbox="" referrerPolicy="no-referrer"
+            srcDoc={htmlPreview} style={{display:"block",width:"100%",height:520,
+              marginTop:16,border:"1px solid #dae4dc",borderRadius:10,background:"#fff"}}/>:
+          <div style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",marginTop:16}}>
+            {message.text||"(No plain-text version supplied by the sender.)"}
+          </div>}
         {Boolean(message.attachments?.length)&&<p className="section-copy" style={{marginTop:12}}>
           Attachments: {message.attachments?.map(a=>a.filename||"Attachment").join(", ")}
           {" "}— downloads are available from the original Resend inbox.
@@ -250,6 +279,7 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
         <div className="field"><label htmlFor="camp-reply-body">Reply</label>
           <textarea id="camp-reply-body" required rows={6} maxLength={12000} value={reply}
             onChange={event=>{setReply(event.target.value);replyRequest.current=null;setReplyUncertain(false);}}/></div>
+        <p className="section-copy">Replies include the current Camp Rise Again logo, branded HTML and a plain-text alternative.</p>
         <button className="btn btn-primary" disabled={busy||replyUncertain}>Review &amp; Send Reply</button>
       </form>}
       {!replyTarget&&<p className="section-copy">Select an incoming message above to reply.</p>}
