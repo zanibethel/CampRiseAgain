@@ -102,9 +102,13 @@ export async function GET(req: Request) {
       if (!FOLDERS.has(folder)) return response({ error: "Unknown folder." }, 400);
       const cursor = url.searchParams.get("after");
       if (cursor && !id(cursor)) return response({ error: "Invalid cursor." }, 400);
-      const query = new URLSearchParams({ folders: folder, limit: "30" });
+      const contact = url.searchParams.get("contact");
+      if (contact && (!parseAddress(contact) || contact.length > 254))
+        return response({ error: "Invalid contact email filter." }, 400);
+      const query = new URLSearchParams({ folders: contact ? "inbox,archive,sent" : folder, limit: "30" });
+      if (contact) query.set("query", contact);
       if (cursor) query.set("after", cursor);
-      const result = await resend(base + "/threads?" + query.toString());
+      const result = await resend(base + (contact ? "/threads/search?" : "/threads?") + query.toString());
       return response({ ...result, signature: admin.signature, sender: admin.sender });
     }
     const thread = id(url.searchParams.get("thread"));
