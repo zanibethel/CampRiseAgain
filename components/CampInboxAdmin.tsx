@@ -10,7 +10,7 @@ type Thread = {
   folder?: string; received_at?: string; email_count?: number;
 };
 type Mail = {
-  id: string; from: string; to?: string[]; subject?: string; direction: string;
+  id: string; from: string; to?: string[]; reply_to?: string[] | string; subject?: string; direction: string;
   received_at?: string; text?: string; attachments?: {filename?: string;size?: number}[];
 };
 const boxes: {id:Box;name:string;address:string}[] = [
@@ -81,7 +81,10 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
 
   const shown=useMemo(()=>threads.filter(t=>[t.subject,t.from,...(t.to||[])]
     .some(v=>String(v||"").toLowerCase().includes(filter.trim().toLowerCase()))),[threads,filter]);
-  const replyTarget=useMemo(()=>[...messages].reverse().find(x=>x.direction==="inbound"),[messages]);
+  const replyTarget=message?.direction==="inbound" ? message : null;
+  const replyRecipient=replyTarget
+    ? (Array.isArray(replyTarget.reply_to) ? replyTarget.reply_to.join(", ") : replyTarget.reply_to)||replyTarget.from
+    : "";
   const currentAddress=boxes.find(b=>b.id===box)?.address||"info@campriseagain.org";
 
   async function openThread(t:Thread) {
@@ -91,7 +94,8 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
       const result=await mailRequest("GET",{view:"thread",inbox:box,thread:t.id});
       const entries=Array.isArray(result.emails)?result.emails as Mail[]:[];
       setMessages(entries);
-      if(entries.length)await openMessage(t.id,entries[entries.length-1].id);
+      const latestInbound=[...entries].reverse().find(item=>item.direction==="inbound");
+      if(entries.length)await openMessage(t.id,(latestInbound||entries[entries.length-1]).id);
       if(!t.read) {
         await mailRequest("PATCH",{}, {inbox:box,thread:t.id,read:true});
         setThreads(old=>old.map(item=>item.id===t.id?{...item,read:true}:item));
@@ -130,7 +134,7 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
     event.preventDefault();
     if(!active || !replyTarget || !reply.trim())return;
     if(!window.confirm("Send this reply?\n\nFrom: "+currentAddress+
-      "\nReplying to: "+replyTarget.from+"\nSubject: Re: "+(active.subject||"Message")+
+      "\nReplying to: "+replyRecipient+"\nSubject: Re: "+(active.subject||"Message")+
       "\n\n"+reply.trim()+"\n\n"+signature+"\n\nSending cannot be undone."))return;
     setBusy(true);setStatus("");
     try{
@@ -220,13 +224,13 @@ export default function CampInboxAdmin({initialTo=""}:{initialTo?:string}) {
         </p>}
       </div>}
       {replyTarget&&<form onSubmit={sendReply}>
-        <h3>Reply to {replyTarget.from}</h3>
+        <h3>Reply to {replyRecipient}</h3>
         <div className="field"><label htmlFor="camp-reply-body">Reply</label>
           <textarea id="camp-reply-body" required rows={6} maxLength={12000} value={reply}
             onChange={event=>setReply(event.target.value)}/></div>
         <button className="btn btn-primary" disabled={busy}>Review &amp; Send Reply</button>
       </form>}
-      {!replyTarget&&<p className="section-copy">This thread has no incoming email to reply to yet.</p>}
+      {!replyTarget&&<p className="section-copy">Select an incoming message above to reply.</p>}
     </div>:<>
       <div className="field"><label htmlFor="camp-inbox-filter">Filter loaded conversations</label>
         <input id="camp-inbox-filter" type="search" placeholder="Search sender or subject" value={filter}
