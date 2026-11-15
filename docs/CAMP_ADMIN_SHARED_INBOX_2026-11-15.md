@@ -7,7 +7,7 @@ Allow approved Camp admins to read, reply to, archive, and start official one-to
 ## What this branch adds
 
 - New **Camp Email Inbox** tab with General / Volunteers / Forms mailbox picker, Inbox / Sent / Archived folders, readable threads, message bodies rendered as plain text, Compose, Reply, and manual Refresh.
-- Direct one-to-one emails can start from **Contacts & Announcements → Edit Contact → Send Official Email**, with a pre-filled recipient and the General mailbox.
+- Direct one-to-one emails can start from **Contacts & Announcements → Edit Contact → Send Official Email**, with a pre-filled recipient and the General mailbox. **Email History** opens contact-filtered threads across Inbox/Sent/Archive; switch Camp mailboxes to inspect each one (provider search may lag by about a minute).
 - Only current Camp admins can access the server-side inbox route: each request is authenticated through the existing `camp-email-bridge` live admin directory. Inboxes and thread IDs are server-validated; the Resend key stays server-only.
 - Outgoing messages use the dedicated `CAMP_RESEND_API_KEY` and existing three Resend inboxes, not the unrelated transactional email API or newsletter sender. Resend stores mail and threads; no new database tables or Supabase migration.
 - Personal signatures are derived from an active, verified forwarding record matching the admin's validated JWT identity, when one exists. Other admins use “Camp Rise Again Team”.
