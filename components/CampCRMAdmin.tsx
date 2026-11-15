@@ -37,7 +37,7 @@ async function adminCall(view:string,body?:Record<string,unknown>) {
   return result;
 }
 
-export default function CampCRMAdmin({onCompose}:{onCompose?:(email:string)=>void}={}) {
+export default function CampCRMAdmin({onCompose,onHistory}:{onCompose?:(email:string)=>void;onHistory?:(email:string)=>void}={}) {
   const [section,setSection]=useState<"contacts"|"campaigns">("contacts");
   const [contacts,setContacts]=useState<Contact[]>([]);
   const [total,setTotal]=useState(0);
@@ -284,6 +284,7 @@ export default function CampCRMAdmin({onCompose}:{onCompose?:(email:string)=>voi
           <textarea maxLength={1000} rows={3} value={selected.notes} onChange={e=>setSelected({...selected,notes:e.target.value})}/></div>
         <div className="actions"><button className="btn btn-primary" disabled={busy}>Save Contact</button>
           {onCompose&&<button type="button" className="btn btn-secondary" onClick={()=>onCompose(selected.email)}>Send Official Email</button>}
+          {onHistory&&<button type="button" className="btn btn-secondary" onClick={()=>onHistory(selected.email)}>Email History</button>}
           <button type="button" className="btn btn-secondary" onClick={()=>setSelected(null)}>Close</button></div>
       </form>}
     </>}
