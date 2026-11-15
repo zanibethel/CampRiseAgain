@@ -121,7 +121,7 @@ export async function GET(req: Request) {
       const m = await resend(pathFor(inbox, thread, message));
       // Display plain text only. Untrusted inbound HTML is NEVER inserted into the admin DOM.
       return response({
-        id: m.id, from: m.from, to: m.to, subject: m.subject, direction: m.direction,
+        id: m.id, from: m.from, to: m.to, reply_to: m.reply_to, subject: m.subject, direction: m.direction,
         received_at: m.received_at, text: typeof m.text === "string" ? m.text.slice(0, 50000) : "",
         attachments: Array.isArray(m.attachments) ? m.attachments.map((a: unknown) => {
           const value = a && typeof a === "object" ? a as Json : {};
