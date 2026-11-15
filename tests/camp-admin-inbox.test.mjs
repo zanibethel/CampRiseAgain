@@ -51,12 +51,7 @@ test("HTML email escapes untrusted message and signature text, preserving paragr
   assert.match(html,/Zac &lt;Support&gt;<br>Camp Team/);
   assert.doesNotMatch(html,/<script>/);
   assert.match(html,/<p style=/);
-  assert.match(campAdminEmailHtml("hi","Team","javascript:alert(1)"),new RegExp(campMailFallbackLogo().replace(/[.*+?^\$\{\}()|[\]\\]/g,"\\test("inbound email bodies are treated as untrusted plain text",()=>{
-  assert.match(api,/typeof m\.text === "string"/);
-  assert.doesNotMatch(ui,/dangerouslySetInnerHTML/);
-  assert.match(ui,/Plain text is shown/);
-  assert.match(ui,/window\.confirm\(/);
-});")));
+  assert.ok(campAdminEmailHtml("hi","Team","javascript:alert(1)").includes(campMailFallbackLogo()));
 });
 test("admin inbox is accessible from CRM contacts and independent of newsletters",()=>{
   assert.match(admin,/id: "inbox", label: "Camp Email Inbox"/);
