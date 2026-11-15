@@ -11,13 +11,14 @@ import AdminManagement from "@/components/AdminManagement";
 import {campAdminAllowed} from "@/lib/camp-admin-access";
 import SubmissionsAdmin from "@/components/SubmissionsAdmin";
 import CampCRMAdmin from "@/components/CampCRMAdmin";
+import CampInboxAdmin from "@/components/CampInboxAdmin";
 import FAQAdmin from "@/components/FAQAdmin";
 import PastCampsAdmin from "@/components/PastCampsAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { normalizedCampAdminEmail } from "@/lib/camp-admin-email-validation";
 
 
-type AdminSection = "crm" | "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "admins" | "submissions" | "faq" | "past-camps";
+type AdminSection = "inbox" | "crm" | "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "admins" | "submissions" | "faq" | "past-camps";
 
 type ResourceItem = {
   id: number;
@@ -39,6 +40,8 @@ export default function AdminPage() {
   const [authBusy, setAuthBusy] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [activeSection, setActiveSection] = useState<AdminSection>("home");
+  const [composeTo, setComposeTo] = useState("");
+  const [historyFor, setHistoryFor] = useState("");
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [editingResourceId, setEditingResourceId] = useState<number | null>(null);
   const [draggingResourceId, setDraggingResourceId] = useState<number | null>(null);
@@ -371,6 +374,7 @@ export default function AdminPage() {
 
   const tabs: { id: AdminSection; label: string; description: string }[] = [
     { id: "analytics", label: "Visitor Analytics", description: "Visitors, page views, trends, and top pages" },
+    { id: "inbox", label: "Camp Email Inbox", description: "Read incoming mail, reply and send official Camp emails" },
     { id: "email", label: "Email Forwarding", description: "Gmail forwarding recipients and reply signatures" },
     { id: "admins", label: "Admin Management", description: "Invite teammates, check access, and resend or remove accounts" },
     { id: "submissions", label: "Form Submissions", description: "Review camper, volunteer and contact forms privately" },
@@ -387,16 +391,20 @@ export default function AdminPage() {
     <><SiteHeader /><main className="form-wrap" style={{ maxWidth: 980 }}>
       <div className="eyebrow">Administration</div><h1>Camp Rise Again Admin</h1><p className="section-copy">Signed in as {userEmail}. Choose the page you want to update below.</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, margin: "24px 0" }}>
-        {tabs.map((tab) => { const active = activeSection === tab.id; return <button key={tab.id} type="button" onClick={() => { setActiveSection(tab.id); setStatus(""); window.requestAnimationFrame(() => document.getElementById("admin-section-content")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} className="card" style={{ textAlign: "left", cursor: "pointer", border: active ? "2px solid currentColor" : undefined, opacity: active ? 1 : .86 }}><strong style={{ display: "block", fontSize: 18, marginBottom: 6 }}>{tab.label}</strong><span style={{ fontSize: 14, opacity: .8 }}>{tab.description}</span></button>; })}
+        {tabs.map((tab) => { const active = activeSection === tab.id; return <button key={tab.id} type="button" onClick={() => { setComposeTo(""); setHistoryFor(""); setActiveSection(tab.id); setStatus(""); window.requestAnimationFrame(() => document.getElementById("admin-section-content")?.scrollIntoView({ behavior: "smooth", block: "start" })); }} className="card" style={{ textAlign: "left", cursor: "pointer", border: active ? "2px solid currentColor" : undefined, opacity: active ? 1 : .86 }}><strong style={{ display: "block", fontSize: 18, marginBottom: 6 }}>{tab.label}</strong><span style={{ fontSize: 14, opacity: .8 }}>{tab.description}</span></button>; })}
       </div>
       <div className="actions" style={{ marginBottom: 24 }}><a className="btn btn-primary" href="/" target="_blank" rel="noreferrer">Preview Site ↗</a><button className="btn btn-secondary" type="button" onClick={signOut}>Sign Out</button></div>
 
       <div id="admin-section-content" style={{ scrollMarginTop: 20 }}>
       {activeSection === "analytics" && <VisitorAnalyticsAdmin />}
       {activeSection === "email" && <EmailForwardingAdmin />}
+      {activeSection === "inbox" && <CampInboxAdmin initialTo={composeTo} initialContact={historyFor} />}
       {activeSection === "admins" && <AdminManagement />}
       {activeSection === "submissions" && <SubmissionsAdmin />}
-      {activeSection === "crm" && <CampCRMAdmin />}
+      {activeSection === "crm" && <CampCRMAdmin
+        onCompose={(recipient) => { setHistoryFor(""); setComposeTo(recipient); setActiveSection("inbox"); }}
+        onHistory={(recipient) => { setComposeTo(""); setHistoryFor(recipient); setActiveSection("inbox"); }}
+      />}
       {activeSection === "faq" && <FAQAdmin />}
       {activeSection === "past-camps" && <PastCampsAdmin />}
       {activeSection === "home" && <HomeAdmin />}
