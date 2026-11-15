@@ -17,6 +17,7 @@ Allow approved Camp admins to read, reply to, archive, and start official one-to
 ## Critical integration and rollout checks
 
 1. Verify the dedicated Camp Resend key has **full inbox access** (read/list/send), not sending-only access. Do not change other project keys. Existing Resend inboxes must remain intact: `info@`, `volunteer@`, and `forms@campriseagain.org`.
+   - Verified Vercel configuration currently places `CAMP_RESEND_API_KEY` and `CAMP_SUPABASE_BRIDGE_TOKEN` in **production only**. The preview build can render the UI but cannot read/send real inbox mail without a separate, branch-scoped credential setup. Do **not** copy a production key indiscriminately into all preview environments.
 2. Run `npm install --ignore-scripts`, `npm run test:mail`, and `npm run build` on the PR branch.
 3. Test a signed-out user and a non-admin session cannot list/read/send mail.
 4. In a Camp-admin preview session, open each mailbox, open a received message, read its plaintext, and verify **Inbox**, **Sent**, and **Archive** behavior. Verify the UI is usable on mobile.
