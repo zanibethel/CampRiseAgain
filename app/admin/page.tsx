@@ -11,13 +11,14 @@ import AdminManagement from "@/components/AdminManagement";
 import {campAdminAllowed} from "@/lib/camp-admin-access";
 import SubmissionsAdmin from "@/components/SubmissionsAdmin";
 import CampCRMAdmin from "@/components/CampCRMAdmin";
+import CampInboxAdmin from "@/components/CampInboxAdmin";
 import FAQAdmin from "@/components/FAQAdmin";
 import PastCampsAdmin from "@/components/PastCampsAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { normalizedCampAdminEmail } from "@/lib/camp-admin-email-validation";
 
 
-type AdminSection = "crm" | "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "admins" | "submissions" | "faq" | "past-camps";
+type AdminSection = "inbox" | "crm" | "home" | "memorial" | "resources" | "staff" | "analytics" | "email" | "admins" | "submissions" | "faq" | "past-camps";
 
 type ResourceItem = {
   id: number;
@@ -39,6 +40,7 @@ export default function AdminPage() {
   const [authBusy, setAuthBusy] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [activeSection, setActiveSection] = useState<AdminSection>("home");
+  const [composeTo, setComposeTo] = useState("");
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [editingResourceId, setEditingResourceId] = useState<number | null>(null);
   const [draggingResourceId, setDraggingResourceId] = useState<number | null>(null);
@@ -371,6 +373,7 @@ export default function AdminPage() {
 
   const tabs: { id: AdminSection; label: string; description: string }[] = [
     { id: "analytics", label: "Visitor Analytics", description: "Visitors, page views, trends, and top pages" },
+    { id: "inbox", label: "Camp Email Inbox", description: "Read incoming mail, reply and send official Camp emails" },
     { id: "email", label: "Email Forwarding", description: "Gmail forwarding recipients and reply signatures" },
     { id: "admins", label: "Admin Management", description: "Invite teammates, check access, and resend or remove accounts" },
     { id: "submissions", label: "Form Submissions", description: "Review camper, volunteer and contact forms privately" },
@@ -394,9 +397,10 @@ export default function AdminPage() {
       <div id="admin-section-content" style={{ scrollMarginTop: 20 }}>
       {activeSection === "analytics" && <VisitorAnalyticsAdmin />}
       {activeSection === "email" && <EmailForwardingAdmin />}
+      {activeSection === "inbox" && <CampInboxAdmin initialTo={composeTo} />}
       {activeSection === "admins" && <AdminManagement />}
       {activeSection === "submissions" && <SubmissionsAdmin />}
-      {activeSection === "crm" && <CampCRMAdmin />}
+      {activeSection === "crm" && <CampCRMAdmin onCompose={(recipient) => { setComposeTo(recipient); setActiveSection("inbox"); }} />}
       {activeSection === "faq" && <FAQAdmin />}
       {activeSection === "past-camps" && <PastCampsAdmin />}
       {activeSection === "home" && <HomeAdmin />}
