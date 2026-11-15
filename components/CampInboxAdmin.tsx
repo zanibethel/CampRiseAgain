@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type Box = "info" | "volunteer" | "forms";
@@ -57,6 +57,10 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
   const [subject,setSubject]=useState("");
   const [body,setBody]=useState("");
   const [reply,setReply]=useState("");
+  const composeRequest=useRef<string|null>(null);
+  const replyRequest=useRef<string|null>(null);
+  const [sendUncertain,setSendUncertain]=useState(false);
+  const [replyUncertain,setReplyUncertain]=useState(false);
   const [busy,setBusy]=useState(false);
   const [status,setStatus]=useState("");
   const [filter,setFilter]=useState("");
@@ -90,6 +94,7 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
 
   async function openThread(t:Thread) {
     setActive(t);setCompose(false);setMessage(null);setMessages([]);setReply("");
+    replyRequest.current=null;setReplyUncertain(false);
     setBusy(true);setStatus("");
     try{
       const result=await mailRequest("GET",{view:"thread",inbox:box,thread:t.id});
@@ -113,39 +118,52 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
   function startCompose(to="") {
     setCompose(true);setActive(null);setMessage(null);setRecipient(to);
     setSubject("");setBody("");setStatus("");
+    composeRequest.current=null;setSendUncertain(false);
   }
   async function sendNew(event:FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanBody=body.trim();
-    if(!cleanBody || !recipient.trim() || !subject.trim())return;
+    if(!cleanBody || !recipient.trim() || !subject.trim() || sendUncertain)return;
     if(!window.confirm("Send this official Camp Rise Again email?\n\nFrom: "+
       currentAddress+"\nTo: "+recipient.trim()+"\nSubject: "+subject.trim()+
       "\n\n"+cleanBody+"\n\n"+signature+"\n\nSending cannot be undone."))return;
     setBusy(true);setStatus("");
     try{
+      composeRequest.current??=crypto.randomUUID();
       await mailRequest("POST",{}, {action:"new",inbox:box,to:recipient.trim(),
-        subject:subject.trim(),text:cleanBody,requestId:crypto.randomUUID()});
+        subject:subject.trim(),text:cleanBody,requestId:composeRequest.current});
       setCompose(false);setBody("");setSubject("");
+      composeRequest.current=null;setSendUncertain(false);
       setStatus("Email accepted by Resend. Check Sent for the conversation.");
       await loadThreads(box,folder,undefined,contact);
-    }catch(error){setStatus(error instanceof Error?error.message:"Email not sent.");}
+    }catch(error){
+      setSendUncertain(true);
+      setStatus((error instanceof Error?error.message:"Send could not be confirmed.")+
+        " Check Sent and any Resend drafts before attempting another send; the recipient may already have received it.");
+    }
     finally{setBusy(false);}
   }
   async function sendReply(event:FormEvent<HTMLFormElement>){
     event.preventDefault();
-    if(!active || !replyTarget || !reply.trim())return;
+    if(!active || !replyTarget || !reply.trim() || replyUncertain)return;
     if(!window.confirm("Send this reply?\n\nFrom: "+currentAddress+
       "\nReplying to: "+replyRecipient+"\nSubject: Re: "+(active.subject||"Message")+
       "\n\n"+reply.trim()+"\n\n"+signature+"\n\nSending cannot be undone."))return;
     setBusy(true);setStatus("");
     try{
+      replyRequest.current??=crypto.randomUUID();
       await mailRequest("POST",{}, {action:"reply",inbox:box,thread:active.id,
-        message:replyTarget.id,text:reply.trim(),requestId:crypto.randomUUID()});
-      setReply("");setStatus("Reply accepted by Resend.");
+        message:replyTarget.id,text:reply.trim(),requestId:replyRequest.current});
+      setReply("");replyRequest.current=null;setReplyUncertain(false);
+      setStatus("Reply accepted by Resend.");
       const result=await mailRequest("GET",{view:"thread",inbox:box,thread:active.id});
       setMessages(Array.isArray(result.emails)?result.emails:[]);
       await loadThreads(box,folder,undefined,contact);
-    }catch(error){setStatus(error instanceof Error?error.message:"Reply was not sent.");}
+    }catch(error){
+      setReplyUncertain(true);
+      setStatus((error instanceof Error?error.message:"Reply could not be confirmed.")+
+        " Check this thread before attempting another reply.");
+    }
     finally{setBusy(false);}
   }
   async function archiveThread() {
@@ -188,15 +206,15 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
       <p className="section-copy">From: {currentAddress}</p>
       <div className="field"><label htmlFor="camp-compose-to">To</label>
         <input id="camp-compose-to" type="email" required maxLength={254} value={recipient}
-          onChange={event=>setRecipient(event.target.value)}/></div>
+          onChange={event=>{setRecipient(event.target.value);composeRequest.current=null;setSendUncertain(false);}}/></div>
       <div className="field"><label htmlFor="camp-compose-subject">Subject</label>
         <input id="camp-compose-subject" required minLength={3} maxLength={160} value={subject}
-          onChange={event=>setSubject(event.target.value)}/></div>
+          onChange={event=>{setSubject(event.target.value);composeRequest.current=null;setSendUncertain(false);}}/></div>
       <div className="field"><label htmlFor="camp-compose-body">Message</label>
         <textarea id="camp-compose-body" required rows={9} maxLength={12000} value={body}
-          onChange={event=>setBody(event.target.value)}/></div>
+          onChange={event=>{setBody(event.target.value);composeRequest.current=null;setSendUncertain(false);}}/></div>
       <p className="section-copy">Your sender signature is added automatically. This is a direct operational email, not a newsletter blast.</p>
-      <div className="actions"><button className="btn btn-primary" disabled={busy}>Review &amp; Send</button>
+      <div className="actions"><button className="btn btn-primary" disabled={busy||sendUncertain}>Review &amp; Send</button>
         <button className="btn btn-secondary" type="button" onClick={()=>setCompose(false)}>Cancel</button></div>
     </form>:active?<div className="card">
       <div className="actions" style={{justifyContent:"space-between",marginBottom:14}}>
@@ -231,8 +249,8 @@ export default function CampInboxAdmin({initialTo="",initialContact=""}:{initial
         <h3>Reply to {replyRecipient}</h3>
         <div className="field"><label htmlFor="camp-reply-body">Reply</label>
           <textarea id="camp-reply-body" required rows={6} maxLength={12000} value={reply}
-            onChange={event=>setReply(event.target.value)}/></div>
-        <button className="btn btn-primary" disabled={busy}>Review &amp; Send Reply</button>
+            onChange={event=>{setReply(event.target.value);replyRequest.current=null;setReplyUncertain(false);}}/></div>
+        <button className="btn btn-primary" disabled={busy||replyUncertain}>Review &amp; Send Reply</button>
       </form>}
       {!replyTarget&&<p className="section-copy">Select an incoming message above to reply.</p>}
     </div>:<>
