@@ -34,3 +34,13 @@ Allow approved Camp admins to read, reply to, archive, and start official one-to
 - Shared read/archive state is global to the mailbox, not per-admin. This is a deliberate shared-inbox behavior.
 - Attachments can be viewed in the provider inbox; downloads, inline HTML, CC/BCC, inbox assignments, per-admin audit ledger, and advanced search are future enhancements.
 - Existing forwarded Gmail messages are copies. Outgoing messages sent directly through Gmail without the relay may not appear in Resend's inbox; new in-admin messages do.
+
+## Preview credential limitation confirmed (November 15, 2026)
+
+The Camp Vercel project stores `CAMP_RESEND_API_KEY` and `CAMP_SUPABASE_BRIDGE_TOKEN` as unreadable **production-only Secrets**. The connected Vercel API exposes the names, environment targets, and metadata, but **does not return either value**. We cannot securely copy them into a branch-scoped Preview environment without the original values or an authorized rotation. Avoid moving the existing production-only records to Preview: that would either affect production or potentially expose shared secrets to unrelated preview branches.
+
+**User-owned setup path:** In Vercel → camp-rise-again → Settings → Environment Variables, add *new entries* for these same two keys, as Secret, targeted to Preview branch `feat/admin-shared-inbox-20261115` only, using the original values from the secure credential owner. Never paste secrets in chat, GitHub, or public build logs. If their originals are unavailable, plan a controlled rotation, explicitly preserving the existing working production relay throughout the transition. After saving, redeploy the preview branch to pick up the new values.
+
+**Resend permission note:** The Inbox API requires a **full-access Resend API key** for list/read inbox and thread endpoints; a sending-only/domain-restricted API key can send replies/drafts but cannot list/read inbox messages. The connected Resend tool lists keys but does not reveal an existing key's permissions. Do not create or install a new full-account key without understanding it grants broader privileges across the shared Resend account (other projects use the same account). Prefer verifying the existing Camp key permissions first.
+
+**Remaining verification:** With branch-scoped credentials configured, test the preview's live admin JWT authorization, inbox/thread reads, contact-based history, single test send and reply, Sent threading, and continued Gmail forwarder behavior. Then merge and verify production deployment. Do not merge based solely on an unauthenticated API or unit-test check.
