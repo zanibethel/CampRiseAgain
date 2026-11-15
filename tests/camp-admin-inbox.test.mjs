@@ -35,3 +35,12 @@ test("admin inbox is accessible from CRM contacts and independent of newsletters
   assert.match(api,/\/drafts/);
   assert.doesNotMatch(api,/admin_campaign_begin|admin_campaign_eligible/);
 });
+
+test("ambiguous mail responses block retries until the draft is reviewed or edited",()=>{
+  assert.match(ui,/sendUncertain/);
+  assert.match(ui,/replyUncertain/);
+  assert.match(ui,/composeRequest\.current/);
+  assert.match(ui,/replyRequest\.current/);
+  assert.match(ui,/Check Sent and any Resend drafts/);
+  assert.match(ui,/Check this thread before attempting another reply/);
+});
