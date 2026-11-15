@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { campBridge, CampBridgeError } from "@/lib/camp-supabase-bridge";
 import { CAMP_INBOXES, parseAddress, safeSubject } from "@/lib/camp-email-helpers";
-import { campAdminEmailHtml, campMailFallbackLogo } from "@/lib/camp-admin-email-html";
-import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { campAdminEmailHtml } from "@/lib/camp-admin-email-html";
+import { currentCampLogoUrl } from "@/lib/camp-email-branding";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,19 +49,6 @@ async function authorize(req: Request) {
       ? [own.display_name.trim(), own.title?.trim()].filter(Boolean).join("\n")
       : "Camp Rise Again Team",
   };
-}
-async function currentCampLogoUrl(): Promise<string> {
-  // Read the same public logo setting used by the website, with its public key;
-  // never expose the private Camp mail key or the Supabase bridge credential.
-  try {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase.from("site_settings").select("logo_path").eq("id", 1).maybeSingle();
-    if (!error && typeof data?.logo_path === "string" &&
-        /^[a-z\d\/_-]+\.(?:png|jpe?g|webp)$/i.test(data.logo_path)) {
-      return supabase.storage.from("camp-rise-again-branding").getPublicUrl(data.logo_path).data.publicUrl;
-    }
-  } catch { /* Email should still deliver using the bundled site logo. */ }
-  return campMailFallbackLogo();
 }
 function providerKey() {
   const key = process.env.CAMP_RESEND_API_KEY;
