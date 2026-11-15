@@ -54,3 +54,18 @@ A production-target deployment was built from this PR at commit `4cd5f312a53ff7f
 **Browser verification still required:** The deployment is protected by Vercel Authentication, which blocked a connected read-only web fetch of `/api/admin/inbox`. A real Camp admin should visit `https://camp-rise-again-c4exiwjz1-zanibethels-projects.vercel.app/admin`, sign into Vercel if prompted and then Camp Admin, and test Inbox/General opening the previous forwarding relay test thread. Then send an official test email to their own controlled address, reply, verify the new Sent/thread state, and confirm Gmail forwarding remains unchanged. Do not send sensitive camper/volunteer data in tests. This cannot be claimed verified until an actual authorized admin session completes it.
 
 **Important:** Do not trigger another target=production deployment from the feature branch without explicit domain-assignment safeguards; a staged build can still overwrite production aliases when it reaches READY. The current separate deployment URL is sufficient for browser QA.
+
+## Branded multipart email + safe HTML display (November 15, 2026)
+
+This branch now sends `text` **and** `html` on:
+- New official emails and threaded replies from the Camp admin inbox.
+- Gmail-forwarded replies via `app/api/webhooks/camp-email/route.ts` (the route used in the controlled reply screenshot).
+- Inbound-message copies forwarded from the Camp inbox to authorized Gmail forwarding recipients.
+
+Every HTML email uses a shared, table-based Camp Rise Again branded layout with a public HTTPS logo, slogan, unchanged staff display-name/title signature, and a CampRiseAgain.org link. The public `site_settings.logo_path` from `camp-rise-again-branding` is consulted at send time; the bundled PNG is the fallback when the public logo is missing, invalid, or unavailable. User-entered text is **always escaped before HTML is generated**, not sent as arbitrary markup. `text` is preserved as a mail-client accessibility/fallback body.
+
+Inbox message rendering now includes **View HTML / View Plain Text**. Received HTML is embedded only in an opaque, script-disabled sandboxed iframe with a restrictive Content Security Policy (no scripts, forms, remote fonts, connections, or active content). Remote images are blocked by default and may be explicitly enabled per message; doing so can expose the reader's IP to an external sender via tracking pixels. Links inside the preview cannot open/execute. Attachments remain viewable via Resend.
+
+**Deployment verification:** Run `npm run test:mail` and `npm run build` in CI; test that an inbox-generated official email **and** a reply from a Gmail forwarder show the current logo and preserve the correct identity signature; verify the original `Reply-To` routing, threading, and no duplicate sends. Check both HTML and plain-text reader views and optionally allow remote images for an email from a trusted sender. Do not treat the earlier plain-text Gmail screenshot as proof that the updated HTML rendering works until the new build is verified.
+
+**Note:** Campaign newsletters and Supabase authentication emails use separate outbound systems and have not been altered here; this change is scoped to operational Camp inbox messages and the existing Gmail forwarding/reply relay.
