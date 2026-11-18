@@ -5,6 +5,10 @@
 **Site:** https://campriseagain.org  
 **Purpose:** Preserve the agreed commercial model and a future integration plan for CRA's merchandise, digital content, and fundraising.
 
+## Partner collaboration planning (ZOX)
+
+A [ZOX affiliate and exclusive CampRiseAgain charity wristband proposal](zox-affiliate-charity-collaboration-plan-2026-11-18.md) was recorded November 18, 2026. It proposes ZOX-hosted checkout through approved referral links and a separately negotiated co-branded charity design. **Planning only:** no ZOX partnership, affiliate approval, public partner catalog, or live store launch is implied. Do not apply the current 5% CRA-processed retail fee automatically to externally paid affiliate or charity contributions.
+
 ## Cost comparison and possible future pricing review
 
 A separate [storefront cost comparison and fee scenario reference](storefront-cost-comparison-2026-11-14.md) records the November 14, 2026 discussion of third-party storefronts and **$10,000–$20,000 in expected annual retail sales**. It compares **5%, 6%, 8%, and 10% all-inclusive fees** after illustrative Stripe card processing. **8% was suggested as a potential future proposal, not adopted.** The original **5% baseline** remains unchanged until explicitly approved. Re-check vendor prices and actual Connect fees at implementation time.
