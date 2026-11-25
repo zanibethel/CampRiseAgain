@@ -29,7 +29,7 @@ function errorResponse(error: unknown) {
   return json({ error: "Mail settings are temporarily unavailable." }, 503);
 }
 function inboxes(value: unknown): string[] | null {
-  if (!Array.isArray(value) || value.length === 0) return null;
+  if (!Array.isArray(value)) return null;
   if (value.some(id => typeof id !== "string" || !(id in CAMP_INBOXES))) return null;
   return [...new Set(value as string[])];
 }
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
   const title = stringField(input.title, 120);
   const selected = inboxes(input.inboxes);
   if (!address || !name || !selected || address.endsWith("@campriseagain.org")) {
-    return json({ error: "Enter an external email, full name and at least one inbox." }, 400);
+    return json({ error: "Enter an external email, full name and valid inbox selections." }, 400);
   }
   const token = randomBytes(32).toString("hex");
   const tokenHash = createHash("sha256").update(token).digest("hex");
