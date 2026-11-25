@@ -1,9 +1,6 @@
-# Custom Camp email aliases (draft, not production-ready)
-Reuse existing verified receiving domain, webhook and email allowance; do not provision native Resend inboxes or change billing. Preserve existing info/volunteer/forms inboxes, support auth mail and reply aliases.
-- Create and pause aliases in Email Forwarding; choose separately verified recipients and explicit active Camp admin login emails for mailbox ACL.
-- Archive inbound plain text before forwarding; native inboxes remain separate in the same Admin Inbox tab. Authorized members can read, archive, compose and reply from the alias.
-- Verified recipient records may have no native inbox selections (alias-only). No address or recipient is automatically created.
-- New custom forwarded copies instruct users to reply through portal; Gmail reply relay remains available for existing native inboxes only until separately tested with sender authentication.
-- No attachment binaries or HTML-only body archive yet; filenames and plain text only. Do not activate admin@ for nonprofit correspondence until secure attachment retrieval/storage, full message fidelity and delivery reconciliation are implemented.
-- Forwarding reservations prevent duplicate attempts; uncertain deliveries are not automatically retried. Add admin delivery-state display, reconciliation and bounded retries before release.
-- Need database migration and Edge Function deploy, plus build/CI, integration tests (invalid aliases, external recipients, ACL, forwarded copies, native regression, webhook duplicate events, provider failures, attachments), staging end-to-end test and production approval. No live changes from this draft.
+# Custom Camp email aliases — draft
+Uses existing verified receiving domain and webhook, without paid dedicated inboxes. Native info, volunteer and forms inboxes, support auth mail and existing reply aliases remain separate.
+- Configure aliases, explicit active-admin mailbox ACLs and verified forwarding recipients. No default recipients or live alias seeded.
+- Archive incoming plain text, HTML and attachment files in private storage; attachment download requires a fresh ACL check and short-lived signed URL. Display HTML in a sandbox with no remote images or scripts. Upload file cap 40 MiB per file, 100 files per message; body size limits reject over-limit messages rather than silently truncate. Provider download host is restricted; confirm actual provider CDN host in staging.
+- Portal compose, replies, Sent and archive; delivery state shown. Forwarding reservations prevent duplicate attempts; ambiguous sends remain uncertain. No auto-retry for uncertain outcomes. Gmail reply relay for custom aliases is NOT yet supported; use portal replies until verified sender authentication and relay archival are implemented.
+- Release blockers: run CI on this revision, validate migration and private storage RLS against shared project policies, staging end-to-end provider tests incl. HTML/attachments, delivery recovery workflow, and production approval. No live changes.

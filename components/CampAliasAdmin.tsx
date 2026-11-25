@@ -4,7 +4,7 @@ import {getSupabaseBrowserClient} from "@/lib/supabase-browser";
 import {aliasLocalPart} from "@/lib/camp-custom-alias";
 type Alias={local_part:string;label:string;enabled:boolean;access_emails:string[];forwarder_ids:string[]};
 type Person={id:string;email:string;display_name:string};
-type Message={id:string;direction:string;from_email:string;to_email:string;subject:string;body?:string;state:string;read_at:string|null;archived:boolean;created_at:string;attachment_names:string[]};
+type Message={id:string;direction:string;from_email:string;to_email:string;subject:string;body?:string;state:string;read_at:string|null;archived:boolean;created_at:string;attachment_names:string[];archive_complete?:boolean;html_body?:string;files?:{id:string;filename:string;byte_size:number;ready:boolean}[];deliveries?:{forwarder_id:string;state:string}[]};
 async function call(query:Record<string,string>={},data?:Record<string,unknown>){
   const {data:auth}=await getSupabaseBrowserClient().auth.getSession();
   if(!auth.session?.access_token)throw new Error("Sign in again.");
@@ -55,6 +55,12 @@ export default function CampAliasAdmin({mode}:{mode:"settings"|"inbox"}){
       request.current="";setBody("");setTo("");setSubject("");setReplyId("");setStatus("Message sent.");}
     catch(e){setUncertain(true);setStatus(errorText(e)+" Check Sent before composing again.");}finally{setBusy(false);}
   }
+  async function download(fileId:string){
+    if(!message)return;
+    try{const result=await call({}, {action:"download",local_part:selected,messageId:message.id,id:fileId});
+      const link=document.createElement("a");link.href=result.url;link.rel="noreferrer";link.referrerPolicy="no-referrer";link.click();}
+    catch(e){setStatus(errorText(e));}
+  }
   async function mark(archived:boolean){
     if(!message)return;setBusy(true);
     try{await call({}, {action:"mark",local_part:selected,id:message.id,archived});setMessages(old=>old.filter(x=>x.id!==message.id));setMessage(null);}
@@ -79,7 +85,10 @@ export default function CampAliasAdmin({mode}:{mode:"settings"|"inbox"}){
       {messages.map(m=><button key={m.id} className="card" type="button" disabled={busy} onClick={()=>void open(m)} style={{display:"block",width:"100%",textAlign:"left",marginBottom:8}}><strong>{m.subject}</strong><div>{m.direction==="inbound"?m.from_email:m.to_email} · {m.state} · {new Date(m.created_at).toLocaleString()}{m.direction==="inbound"&&!m.read_at?" · Unread":""}</div></button>)}
       <div className="actions"><button type="button" disabled={busy||page===0} onClick={()=>setPage(p=>p-1)}>Previous</button><button type="button" disabled={busy||messages.length<30} onClick={()=>setPage(p=>p+1)}>Next</button></div>
       {message&&<div className="card"><h3>{message.subject}</h3><p>From: {message.from_email} · To: {message.to_email}</p><p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{message.body}</p>
-        {!!message.attachment_names?.length&&<p>Attachments (metadata only): {message.attachment_names.join(", ")}</p>}
+        {message.direction==="inbound"&&!message.archive_complete&&<p>Archive incomplete — attachments may still be processing.</p>}
+        {!!message.html_body&&<iframe title="Email HTML preview" sandbox="" referrerPolicy="no-referrer" style={{width:"100%",minHeight:200,border:0}} srcDoc={"<!doctype html><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'; frame-src 'none'\">"+message.html_body}/>}
+        {message.files?.map(file=><button key={file.id} type="button" disabled={!file.ready} onClick={()=>void download(file.id)}>{file.filename} · {file.ready?"Download":"Pending"}</button>)}
+        {!!message.deliveries?.length&&<div><h4>Forwarding status</h4>{message.deliveries.map(d=><p key={d.forwarder_id}>{people.find(p=>p.id===d.forwarder_id)?.email||"Former recipient"}: {d.state}</p>)}</div>}
         <button type="button" disabled={busy} onClick={()=>void mark(!message.archived)}>{message.archived?"Unarchive":"Archive"}</button>
         {message.direction==="inbound"&&<button type="button" disabled={busy||uncertain} onClick={()=>{setReplyId(message.id);setTo(message.from_email);setSubject("Re: "+message.subject);setBody("");request.current="";}}>Reply</button>}</div>}
       <h3>{replyId?"Reply":"New email"}</h3>

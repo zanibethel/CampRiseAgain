@@ -152,20 +152,44 @@ async function handleCustomAliasEmail(resend: Resend, data: {email_id?:string;fr
   const sender=parseAddress(received.from);
   if(!sender||sender.endsWith("@campriseagain.org"))return;
   const original=received as unknown as {text?:string;html?:string;subject?:string;message_id?:string;attachments?:Array<{filename?:string}>;headers?:Record<string,unknown>};
-  const body=original.text?.slice(0,14000)||"(No plain-text body. Original retained by the mail provider.)";
-  const names=(Array.isArray(original.attachments)?original.attachments:[]).slice(0,20).map(a=>String(a.filename||"Attachment").slice(0,100));
+  const body=original.text||"";
+  const html=original.html||"";
+  if(body.length>300000||html.length>500000)throw new Error("Message exceeds archive limit");
+  const attachmentResponse=await resend.emails.receiving.attachments.list({emailId:data.email_id,limit:100});
+  if(attachmentResponse.error||!attachmentResponse.data||attachmentResponse.data.has_more)throw new Error("Cannot enumerate attachments");
+  const attachments=attachmentResponse.data.data;
+  const names=attachments.map(a=>String(a.filename||"Attachment").slice(0,100));
   for(const local of enabled){
     const address=local+"@campriseagain.org";
     const result=await campBridge<{accepted:boolean;messageId:string;recipients:Array<{id:string;email:string}>}>("alias_receive",{
-      local_part:local,provider_id:data.email_id,from_email:sender,subject:safeSubject(original.subject),body,
+      local_part:local,provider_id:data.email_id,from_email:sender,subject:safeSubject(original.subject),body,html_body:html,
       message_id:original.message_id||null,attachment_names:names,suppress_forward:isAutoResponse(original.headers)
     });
     if(!result.accepted)continue;
+    for(const attachment of attachments){
+      const slot=await campBridge<{ready:boolean;signedUrl:string}>("alias_file_prepare",{messageId:result.messageId,attachmentId:attachment.id,filename:attachment.filename,size:attachment.size});
+      if(slot.ready)continue;
+      const download=new URL(attachment.download_url);
+      if(download.protocol!=="https:"||download.hostname!=="cdn.resend.app")throw new Error("Unexpected attachment download host");
+      const remote=await fetch(download,{redirect:"error",signal:AbortSignal.timeout(20000)});
+      if(!remote.ok||!remote.body)throw new Error("Attachment download unavailable");
+      const reader=remote.body.getReader();const chunks:Uint8Array[]=[];let total=0;
+      try{for(;;){const {done,value}=await reader.read();if(done)break;total+=value.byteLength;
+        if(total>41943040||total>attachment.size)throw new Error("Attachment exceeds declared size");chunks.push(value);}}
+      finally{await reader.cancel().catch(()=>{});}
+      if(total!==attachment.size)throw new Error("Attachment size mismatch");
+      const upload=new URL(slot.signedUrl);
+      if(upload.protocol!=="https:"||upload.hostname!=="yufptpfiwdbzzrvhkvux.supabase.co")throw new Error("Unexpected archive host");
+      const saved=await fetch(upload,{method:"PUT",headers:{"Content-Type":"application/octet-stream","Cache-Control":"max-age=0","x-upsert":"true"},body:Buffer.concat(chunks,total),redirect:"error",signal:AbortSignal.timeout(25000)});
+      if(!saved.ok)throw new Error("Attachment archive failed");
+      await campBridge("alias_file_finish",{messageId:result.messageId,attachmentId:attachment.id});
+    }
+    await campBridge("alias_archive_finish",{messageId:result.messageId,expected:attachments.length});
     for(const person of result.recipients||[]){
       const claim=await campBridge<{claimed:boolean;email:string}>("alias_forward_claim",{messageId:result.messageId,forwarderId:person.id});
       if(!claim.claimed)continue;
-      const forwardText=["Camp Rise Again message received at: "+address,"Original sender: "+sender,"Subject: "+safeSubject(original.subject),"",body,
-        names.length?"Attachments listed in the portal; files are not included in this copy.":"",
+      const forwardText=["Camp Rise Again message received at: "+address,"Original sender: "+sender,"Subject: "+safeSubject(original.subject),"",body.slice(0,14000)||"(HTML message: open the original in the portal.)",
+        names.length?"Attachments are available in the private portal; files are not included in this copy.":"",
         "Reply from the Camp Rise Again admin portal. Do not reply to this forwarded copy."].filter(Boolean).join("\n");
       let sent=false;
       try{

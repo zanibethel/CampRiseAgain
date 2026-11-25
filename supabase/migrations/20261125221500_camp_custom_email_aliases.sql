@@ -43,3 +43,23 @@ alter table public.camp_rise_again_alias_messages enable row level security;
 alter table public.camp_rise_again_alias_delivery enable row level security;
 revoke all on public.camp_rise_again_mail_aliases,public.camp_rise_again_alias_messages,public.camp_rise_again_alias_delivery from public,anon,authenticated;
 grant select,insert,update,delete on public.camp_rise_again_mail_aliases,public.camp_rise_again_alias_messages,public.camp_rise_again_alias_delivery to service_role;
+
+-- Files are not exposed by a public bucket. Service-role bridge issues short-lived download URLs after ACL checks.
+insert into storage.buckets (id,name,public,file_size_limit)
+values ('camp-private-mail','camp-private-mail',false,41943040)
+on conflict(id) do nothing;
+alter table public.camp_rise_again_alias_messages add column archive_complete boolean not null default false;
+alter table public.camp_rise_again_alias_messages add column html_body text not null default '';
+create table public.camp_rise_again_alias_files (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references public.camp_rise_again_alias_messages(id) on delete restrict,
+  provider_attachment_id text not null,
+  filename text not null,
+  byte_size bigint not null check(byte_size between 0 and 41943040),
+  object_path text not null unique,
+  ready boolean not null default false,
+  unique(message_id,provider_attachment_id)
+);
+alter table public.camp_rise_again_alias_files enable row level security;
+revoke all on public.camp_rise_again_alias_files from public,anon,authenticated;
+grant select,insert,update,delete on public.camp_rise_again_alias_files to service_role;

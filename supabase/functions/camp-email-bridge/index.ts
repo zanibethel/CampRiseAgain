@@ -61,12 +61,13 @@ Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return respond({ error: "Method not allowed" }, 405);
   if (!(await authorized(request))) return respond({ error: "Unauthorized" }, 401);
   const raw = await request.text();
-  if (raw.length > 32768) return respond({ error: "Request too large" }, 413);
+  if (raw.length > 1000000) return respond({ error: "Request too large" }, 413);
   let input: { action?: unknown; params?: Json; userToken?: unknown };
   try { input = JSON.parse(raw); } catch { return respond({ error: "Invalid JSON" }, 400); }
   const params: Json = input.params && typeof input.params === "object" && !Array.isArray(input.params)
     ? input.params : {};
   const action = str(input.action, 64);
+  if(raw.length>32768 && action!=="alias_receive") return respond({error:"Request too large"},413);
   const url = Deno.env.get("SUPABASE_URL");
   const legacyKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const newKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}");
@@ -199,6 +200,8 @@ Deno.serve(async (request: Request) => {
     const aliasTable = "camp_rise_again_mail_aliases";
     const aliasMail = "camp_rise_again_alias_messages";
     const deliveryTable = "camp_rise_again_alias_delivery";
+    const aliasFiles = "camp_rise_again_alias_files";
+    const mailBucket = "camp-private-mail";
     const localAlias = (value: unknown) => {
       const v = typeof value === "string" ? value.trim().toLowerCase() : "";
       return /^[a-z][a-z0-9._-]{0,47}$/.test(v) && !v.startsWith("reply-") &&
@@ -255,8 +258,8 @@ Deno.serve(async (request: Request) => {
       if(!row?.enabled||!sender||!provider||sender.endsWith("@campriseagain.org")) return respond({accepted:false});
       const names=Array.isArray(params.attachment_names)?params.attachment_names.slice(0,20).map(x=>str(x,200)).filter(Boolean):[];
       const {error}=await db.from(aliasMail).upsert({alias:local,direction:"inbound",provider_id:provider,from_email:sender,
-        to_email:local+"@campriseagain.org",subject:str(params.subject,160)||"Message",body:str(params.body,16000),
-        attachment_names:names,message_id:str(params.message_id,250)||null,state:"received"},
+        to_email:local+"@campriseagain.org",subject:str(params.subject,160)||"Message",body:typeof params.body==="string"?params.body.slice(0,300000):"",
+        attachment_names:names,html_body:typeof params.html_body==="string"?params.html_body.slice(0,500000):"",message_id:str(params.message_id,250)||null,state:"received"},
         {onConflict:"alias,provider_id",ignoreDuplicates:true});
       if(error) return respond({error:"Could not archive message"},503);
       const {data:message,error:readError}=await db.from(aliasMail).select("id").eq("alias",local).eq("provider_id",provider).single();
@@ -268,6 +271,47 @@ Deno.serve(async (request: Request) => {
       if(recipientError) return respond({error:"Could not load forwarding recipients"},503);
       return respond({accepted:true,messageId:message.id,recipients:recipients||[]});
     }
+    if(action==="alias_file_prepare" || action==="alias_file_finish" || action==="alias_archive_finish"){
+      const messageId=str(params.messageId,64);
+      if(!UUID.test(messageId))return respond({error:"Invalid message"},400);
+      const {data:message,error:messageError}=await db.from(aliasMail).select("id,alias,archive_complete").eq("id",messageId).eq("direction","inbound").maybeSingle();
+      if(messageError||!message)return respond({error:"Archive unavailable"},503);
+      if(action==="alias_archive_finish"){
+        const expected=Number(params.expected);
+        if(!Number.isInteger(expected)||expected<0||expected>100)return respond({error:"Invalid file count"},400);
+        const {count,error}=await db.from(aliasFiles).select("id",{count:"exact",head:true}).eq("message_id",messageId).eq("ready",true);
+        if(error||count!==expected)return respond({error:"Attachment archive incomplete"},503);
+        const {error:updateError}=await db.from(aliasMail).update({archive_complete:true}).eq("id",messageId);
+        return updateError?respond({error:"Archive update failed"},503):respond({ok:true});
+      }
+      const attachmentId=str(params.attachmentId,100);
+      if(!UUID.test(attachmentId))return respond({error:"Invalid attachment"},400);
+      const path=message.alias+"/"+messageId+"/"+attachmentId;
+      if(action==="alias_file_finish"){
+        const {error}=await db.from(aliasFiles).update({ready:true}).eq("message_id",messageId).eq("provider_attachment_id",attachmentId).eq("object_path",path);
+        return error?respond({error:"File state unavailable"},503):respond({ok:true});
+      }
+      const filename=str(params.filename,200).replace(/[\r\n]/g," ")||"attachment";
+      const size=Number(params.size);
+      if(!Number.isSafeInteger(size)||size<0||size>41943040)return respond({error:"Attachment exceeds storage limit"},413);
+      const {error}=await db.from(aliasFiles).upsert({message_id:messageId,provider_attachment_id:attachmentId,filename,byte_size:size,object_path:path},{onConflict:"message_id,provider_attachment_id",ignoreDuplicates:true});
+      if(error)return respond({error:"File metadata unavailable"},503);
+      const {data:existing,error:readError}=await db.from(aliasFiles).select("ready").eq("message_id",messageId).eq("provider_attachment_id",attachmentId).single();
+      if(readError||!existing)return respond({error:"File metadata unavailable"},503);
+      if(existing.ready)return respond({ready:true});
+      const {data:upload,error:uploadError}=await db.storage.from(mailBucket).createSignedUploadUrl(path,{upsert:true});
+      return uploadError||!upload?respond({error:"Upload unavailable"},503):respond({ready:false,signedUrl:upload.signedUrl});
+    }
+    if(action==="admin_alias_file"){
+      const local=localAlias(params.local_part), id=str(params.id,64), messageId=str(params.messageId,64);
+      if(!local||!UUID.test(id)||!UUID.test(messageId)||!(await allowedAlias(local)))return respond({error:"File not found"},404);
+      const {data:message,error:messageError}=await db.from(aliasMail).select("id").eq("alias",local).eq("id",messageId).maybeSingle();
+      if(messageError||!message)return respond({error:"File not found"},404);
+      const {data:file,error}=await db.from(aliasFiles).select("filename,object_path").eq("id",id).eq("message_id",messageId).eq("ready",true).maybeSingle();
+      if(error||!file)return respond({error:"File not found"},404);
+      const {data:signed,error:signError}=await db.storage.from(mailBucket).createSignedUrl(file.object_path,60,{download:file.filename});
+      return signError||!signed?respond({error:"Download unavailable"},503):respond({url:signed.signedUrl});
+    }
     if(action === "alias_forward_claim" || action === "alias_forward_finish") {
       const messageId=str(params.messageId,64), forwarderId=str(params.forwarderId,64);
       if(!UUID.test(messageId)||!UUID.test(forwarderId)) return respond({error:"Invalid delivery"},400);
@@ -276,10 +320,10 @@ Deno.serve(async (request: Request) => {
           .eq("message_id",messageId).eq("forwarder_id",forwarderId).eq("state","pending");
         return error?respond({error:"Delivery state unavailable"},503):respond({ok:true});
       }
-      const {data:message,error:messageError}=await db.from(aliasMail).select("alias,from_email").eq("id",messageId).eq("direction","inbound").maybeSingle();
+      const {data:message,error:messageError}=await db.from(aliasMail).select("alias,from_email,archive_complete").eq("id",messageId).eq("direction","inbound").maybeSingle();
       if(messageError) return respond({error:"Message unavailable"},503);
       const row=message?await aliasRecord(message.alias):null;
-      if(!row?.enabled||!row.forwarder_ids.includes(forwarderId)) return respond({claimed:false});
+      if(!row?.enabled||!message?.archive_complete||!row.forwarder_ids.includes(forwarderId)) return respond({claimed:false});
       const {data:person,error:personError}=await db.from("camp_rise_again_email_forwarders").select("email").eq("id",forwarderId)
         .eq("enabled",true).not("verified_at","is",null).maybeSingle();
       if(personError) return respond({error:"Recipient unavailable"},503);
@@ -314,7 +358,11 @@ Deno.serve(async (request: Request) => {
           return error?respond({error:"Unable to update message"},503):respond({ok:true});
         }
         const {data,error}=await db.from(aliasMail).select("*").eq("alias",local).eq("id",id).maybeSingle();
-        return error?respond({error:"Message unavailable"},503):data?respond({message:data}):respond({error:"Message not found"},404);
+        if(error||!data)return respond({error:"Message not found"},404);
+        const {data:files,error:fileError}=await db.from(aliasFiles).select("id,filename,byte_size,ready").eq("message_id",id).order("filename");
+        const {data:deliveries,error:deliveryError}=await db.from(deliveryTable).select("forwarder_id,state,updated_at").eq("message_id",id);
+        if(fileError||deliveryError)return respond({error:"Message details unavailable"},503);
+        return respond({message:{...data,files:files||[],deliveries:deliveries||[]}});
       }
       if(action==="admin_alias_finish"){
         const requestId=str(params.request_id,64);

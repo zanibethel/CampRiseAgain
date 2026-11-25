@@ -26,6 +26,7 @@ export async function POST(req:Request){
     if(!p||typeof p!=="object"||Array.isArray(p))return reply({error:"Invalid request"},400);
     if(p.action==="save")return reply(await campBridge("admin_alias_save",p,t));
     if(p.action==="mark")return reply(await campBridge("admin_alias_mark",p,t));
+    if(p.action==="download")return reply(await campBridge("admin_alias_file",p,t));
     if(p.action!=="send")return reply({error:"Unknown action"},400);
     const key=process.env.CAMP_RESEND_API_KEY;if(!key)return reply({error:"Mail not configured"},503);
     const message=await campBridge<{recipient:string;subject:string;body:string;signature:string;originalMessageId:string|null}>("admin_alias_reserve",p,t);
