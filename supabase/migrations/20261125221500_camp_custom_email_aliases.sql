@@ -34,7 +34,8 @@ create index camp_alias_messages_list_idx on public.camp_rise_again_alias_messag
 create table public.camp_rise_again_alias_delivery (
   message_id uuid not null references public.camp_rise_again_alias_messages(id) on delete restrict,
   forwarder_id uuid not null,
-  state text not null check (state in ('pending','sent','uncertain')),
+  state text not null check (state in ('pending','sent','uncertain','rejected')),
+  attempts smallint not null default 1 check(attempts between 1 and 3),
   updated_at timestamptz not null default now(),
   primary key(message_id,forwarder_id)
 );

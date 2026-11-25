@@ -191,14 +191,16 @@ async function handleCustomAliasEmail(resend: Resend, data: {email_id?:string;fr
       const forwardText=["Camp Rise Again message received at: "+address,"Original sender: "+sender,"Subject: "+safeSubject(original.subject),"",body.slice(0,14000)||"(HTML message: open the original in the portal.)",
         names.length?"Attachments are available in the private portal; files are not included in this copy.":"",
         "Reply from the Camp Rise Again admin portal. Do not reply to this forwarded copy."].filter(Boolean).join("\n");
-      let sent=false;
+      let sent=false,rejected=false;
       try{
         const response=await resend.emails.send({from:"Camp Rise Again <"+address+">",to:[claim.email],subject:"[Camp Rise Again / "+local+"] "+safeSubject(original.subject),
           text:forwardText,html:campAdminEmailHtml(forwardText,"Camp Rise Again Team",await currentCampLogoUrl())},
           {idempotencyKey:"camp-alias-forward:"+result.messageId+":"+person.id});
-        sent=!response.error;
+        sent=!response.error&&!!response.data?.id;
+        // A provider 429 explicitly rejects this attempt. Transport errors or 5xx are ambiguous.
+        rejected=(response.error as {statusCode?:number}|null)?.statusCode===429;
       }finally{
-        await campBridge("alias_forward_finish",{messageId:result.messageId,forwarderId:person.id,sent});
+        await campBridge("alias_forward_finish",{messageId:result.messageId,forwarderId:person.id,sent,rejected});
       }
     }
   }

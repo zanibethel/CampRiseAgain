@@ -27,6 +27,23 @@ export async function POST(req:Request){
     if(p.action==="save")return reply(await campBridge("admin_alias_save",p,t));
     if(p.action==="mark")return reply(await campBridge("admin_alias_mark",p,t));
     if(p.action==="download")return reply(await campBridge("admin_alias_file",p,t));
+    if(p.action==="retry_forward"){
+      const key=process.env.CAMP_RESEND_API_KEY;if(!key)return reply({error:"Mail not configured"},503);
+      const claim=await campBridge<{claimed:boolean;email:string;attempt:number;message:{id:string;alias:string;from_email:string;subject:string;body:string;attachment_names:string[]}}>("admin_alias_forward_retry",p,t);
+      if(!claim.claimed)return reply({error:"Forwarding no longer enabled"},409);
+      const m=claim.message,address=m.alias+"@campriseagain.org";
+      const body=["Camp Rise Again message received at: "+address,"Original sender: "+m.from_email,"Subject: "+m.subject,"",m.body.slice(0,14000)||"(HTML message: open the original in the portal.)",
+        m.attachment_names.length?"Attachments are available in the private portal; files are not included in this copy.":"",
+        "Reply from the Camp Rise Again admin portal. Do not reply to this forwarded copy."].filter(Boolean).join("\n");
+      let sent=false,rejected=false;
+      try{
+        const result=await new Resend(key).emails.send({from:"Camp Rise Again <"+address+">",to:[claim.email],subject:"[Camp Rise Again / "+m.alias+"] "+m.subject,
+          text:body,html:campAdminEmailHtml(body,"Camp Rise Again Team",await currentCampLogoUrl())},
+          {idempotencyKey:"camp-alias-forward:"+m.id+":"+String(p.forwarderId)+":"+claim.attempt});
+        sent=!result.error&&!!result.data?.id;rejected=(result.error as {statusCode?:number}|null)?.statusCode===429;
+      }finally{await campBridge("alias_forward_finish",{messageId:m.id,forwarderId:p.forwarderId,sent,rejected});}
+      return sent?reply({ok:true}):reply({error:rejected?"Provider rejected the send; review delivery state.":"Delivery uncertain; do not retry until reconciled."},502);
+    }
     if(p.action!=="send")return reply({error:"Unknown action"},400);
     const key=process.env.CAMP_RESEND_API_KEY;if(!key)return reply({error:"Mail not configured"},503);
     const message=await campBridge<{recipient:string;subject:string;body:string;signature:string;originalMessageId:string|null}>("admin_alias_reserve",p,t);

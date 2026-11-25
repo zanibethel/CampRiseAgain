@@ -312,22 +312,32 @@ Deno.serve(async (request: Request) => {
       const {data:signed,error:signError}=await db.storage.from(mailBucket).createSignedUrl(file.object_path,60,{download:file.filename});
       return signError||!signed?respond({error:"Download unavailable"},503):respond({url:signed.signedUrl});
     }
-    if(action === "alias_forward_claim" || action === "alias_forward_finish") {
+    if(action === "alias_forward_claim" || action === "alias_forward_finish" || action === "admin_alias_forward_retry") {
       const messageId=str(params.messageId,64), forwarderId=str(params.forwarderId,64);
       if(!UUID.test(messageId)||!UUID.test(forwarderId)) return respond({error:"Invalid delivery"},400);
       if(action==="alias_forward_finish") {
-        const {error}=await db.from(deliveryTable).update({state:params.sent===true?"sent":"uncertain",updated_at:new Date().toISOString()})
+        const {error}=await db.from(deliveryTable).update({state:params.sent===true?"sent":params.rejected===true?"rejected":"uncertain",updated_at:new Date().toISOString()})
           .eq("message_id",messageId).eq("forwarder_id",forwarderId).eq("state","pending");
         return error?respond({error:"Delivery state unavailable"},503):respond({ok:true});
       }
-      const {data:message,error:messageError}=await db.from(aliasMail).select("alias,from_email,archive_complete").eq("id",messageId).eq("direction","inbound").maybeSingle();
+      const {data:message,error:messageError}=await db.from(aliasMail).select("id,alias,from_email,archive_complete,subject,body,attachment_names").eq("id",messageId).eq("direction","inbound").maybeSingle();
       if(messageError) return respond({error:"Message unavailable"},503);
       const row=message?await aliasRecord(message.alias):null;
+      if(action==="admin_alias_forward_retry" && (!message||!(await allowedAlias(message.alias)))) return respond({error:"Message not found"},404);
       if(!row?.enabled||!message?.archive_complete||!row.forwarder_ids.includes(forwarderId)) return respond({claimed:false});
       const {data:person,error:personError}=await db.from("camp_rise_again_email_forwarders").select("email").eq("id",forwarderId)
         .eq("enabled",true).not("verified_at","is",null).maybeSingle();
       if(personError) return respond({error:"Recipient unavailable"},503);
       if(!person||person.email===message?.from_email) return respond({claimed:false});
+      if(action==="admin_alias_forward_retry"){
+        const {data:prior,error:priorError}=await db.from(deliveryTable).select("state,attempts").eq("message_id",messageId).eq("forwarder_id",forwarderId).maybeSingle();
+        if(priorError)return respond({error:"Delivery unavailable"},503);
+        if(!prior||prior.state!=="rejected"||prior.attempts>=3)return respond({error:"Only confirmed rejected deliveries may be retried (maximum three attempts)"},409);
+        const {data:claimed,error}=await db.from(deliveryTable).update({state:"pending",attempts:prior.attempts+1,updated_at:new Date().toISOString()})
+          .eq("message_id",messageId).eq("forwarder_id",forwarderId).eq("state","rejected").eq("attempts",prior.attempts).select("attempts").maybeSingle();
+        if(error||!claimed)return respond({error:"Retry already claimed or unavailable"},409);
+        return respond({claimed:true,email:person.email,attempt:claimed.attempts,message});
+      }
       const {error}=await db.from(deliveryTable).insert({message_id:messageId,forwarder_id:forwarderId,state:"pending"});
       if(error?.code==="23505") return respond({claimed:false});
       return error?respond({error:"Cannot reserve forwarding delivery"},503):respond({claimed:true,email:person.email});
@@ -360,7 +370,7 @@ Deno.serve(async (request: Request) => {
         const {data,error}=await db.from(aliasMail).select("*").eq("alias",local).eq("id",id).maybeSingle();
         if(error||!data)return respond({error:"Message not found"},404);
         const {data:files,error:fileError}=await db.from(aliasFiles).select("id,filename,byte_size,ready").eq("message_id",id).order("filename");
-        const {data:deliveries,error:deliveryError}=await db.from(deliveryTable).select("forwarder_id,state,updated_at").eq("message_id",id);
+        const {data:deliveries,error:deliveryError}=await db.from(deliveryTable).select("forwarder_id,state,attempts,updated_at").eq("message_id",id);
         if(fileError||deliveryError)return respond({error:"Message details unavailable"},503);
         return respond({message:{...data,files:files||[],deliveries:deliveries||[]}});
       }
