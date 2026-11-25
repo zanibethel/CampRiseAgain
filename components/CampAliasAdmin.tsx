@@ -4,7 +4,7 @@ import {getSupabaseBrowserClient} from "@/lib/supabase-browser";
 import {aliasLocalPart} from "@/lib/camp-custom-alias";
 type Alias={local_part:string;label:string;enabled:boolean;access_emails:string[];forwarder_ids:string[]};
 type Person={id:string;email:string;display_name:string};
-type Message={id:string;direction:string;from_email:string;to_email:string;subject:string;body?:string;state:string;read_at:string|null;archived:boolean;created_at:string;attachment_names:string[];archive_complete?:boolean;html_body?:string;files?:{id:string;filename:string;byte_size:number;ready:boolean}[];deliveries?:{forwarder_id:string;state:string;attempts:number}[]};
+type Message={id:string;direction:string;from_email:string;to_email:string;subject:string;body?:string;state:string;read_at:string|null;archived:boolean;created_at:string;attachment_names:string[];archive_complete?:boolean;sent_by?:string;html_body?:string;files?:{id:string;filename:string;byte_size:number;ready:boolean}[];deliveries?:{forwarder_id:string;state:string;attempts:number}[]};
 async function call(query:Record<string,string>={},data?:Record<string,unknown>){
   const {data:auth}=await getSupabaseBrowserClient().auth.getSession();
   if(!auth.session?.access_token)throw new Error("Sign in again.");
@@ -91,7 +91,7 @@ export default function CampAliasAdmin({mode}:{mode:"settings"|"inbox"}){
     {selected&&<><div className="actions">{["inbox","sent","archive"].map(f=><button key={f} className="btn btn-secondary" disabled={busy||f===folder} onClick={()=>{setFolder(f);setPage(0);}} type="button">{f}</button>)}</div>
       {messages.map(m=><button key={m.id} className="card" type="button" disabled={busy} onClick={()=>void open(m)} style={{display:"block",width:"100%",textAlign:"left",marginBottom:8}}><strong>{m.subject}</strong><div>{m.direction==="inbound"?m.from_email:m.to_email} · {m.state} · {new Date(m.created_at).toLocaleString()}{m.direction==="inbound"&&!m.read_at?" · Unread":""}</div></button>)}
       <div className="actions"><button type="button" disabled={busy||page===0} onClick={()=>setPage(p=>p-1)}>Previous</button><button type="button" disabled={busy||messages.length<30} onClick={()=>setPage(p=>p+1)}>Next</button></div>
-      {message&&<div className="card"><h3>{message.subject}</h3><p>From: {message.from_email} · To: {message.to_email}</p><p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{message.body}</p>
+      {message&&<div className="card"><h3>{message.subject}</h3><p>From: {message.from_email} · To: {message.to_email}</p>{message.sent_by&&<p>Sent via Gmail by {message.sent_by}</p>}<p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{message.body}</p>
         {message.direction==="inbound"&&!message.archive_complete&&<p>Archive incomplete — attachments may still be processing.</p>}
         {!!message.html_body&&<iframe title="Email HTML preview" sandbox="" referrerPolicy="no-referrer" style={{width:"100%",minHeight:200,border:0}} srcDoc={"<!doctype html><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'; frame-src 'none'\">"+message.html_body}/>}
         {message.files?.map(file=><button key={file.id} type="button" disabled={!file.ready} onClick={()=>void download(file.id)}>{file.filename} · {file.ready?"Download":"Pending"}</button>)}

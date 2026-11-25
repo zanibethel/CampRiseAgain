@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { Resend } from "resend";
-import { uniqueAliases } from "@/lib/camp-custom-alias";
+import { uniqueAliases, customReplyToken, customReplyAddress, customForwardInstruction } from "@/lib/camp-custom-alias";
 import { campBridge } from "@/lib/camp-supabase-bridge";
 import { campAdminEmailHtml } from "@/lib/camp-admin-email-html";
 import { currentCampLogoUrl } from "@/lib/camp-email-branding";
@@ -137,8 +137,35 @@ async function handleStaffReply(
   if (error) throw error;
 }
 
+async function handleCustomGmailReply(resend:Resend,data:{email_id?:string;from?:string;to?:string[]}){
+  if(!data.email_id||!Array.isArray(data.to)||data.to.length!==1)return;
+  const token=customReplyToken(parseAddress(data.to[0]));
+  const sender=parseAddress(data.from);
+  if(!token||!sender)return;
+  const {data:received,error}=await resend.emails.receiving.get(data.email_id);
+  if(error||!received)throw new Error("Reply fetch failed");
+  if(parseAddress(received.from)!==sender||isAutoResponse(received.headers as Record<string,unknown>|undefined))return;
+  // Reject attached files and HTML-only replies instead of silently dropping them.
+  if(!received.text||received.attachments?.length)return;
+  const body=newReplyText(received.text);
+  if(!body||body.length>12000)return;
+  const result=await campBridge<{claimed:boolean;id:string;address:string;recipient:string;subject:string;body:string;signature:string;originalMessageId:string|null}>("alias_gmail_reserve",{token,sender,sourceId:data.email_id,body});
+  if(!result.claimed)return;
+  const headers=result.originalMessageId&&/^<[^<>\r\n]{2,250}>$/.test(result.originalMessageId)?
+    {"In-Reply-To":result.originalMessageId,"References":result.originalMessageId}:undefined;
+  let providerId="";
+  try{
+    const sent=await resend.emails.send({from:"Camp Rise Again <"+result.address+">",to:[result.recipient],replyTo:result.address,
+      subject:result.subject,text:result.body+"\n\n"+result.signature,
+      html:campAdminEmailHtml(result.body,result.signature,await currentCampLogoUrl()),headers},
+      {idempotencyKey:"camp-custom-reply:"+createHash("sha256").update(data.email_id).digest("hex")});
+    providerId=sent.data?.id||"";
+  }finally{
+    await campBridge("alias_gmail_finish",{id:result.id,sourceId:data.email_id,providerId});
+  }
+}
 async function handleCustomAliasEmail(resend: Resend, data: {email_id?:string;from?:string;to?:string[]}) {
-  if(!data.email_id || !Array.isArray(data.to) || data.to.some(mailReplyRoute)) return;
+  if(!data.email_id || !Array.isArray(data.to) || data.to.some(mailReplyRoute) || data.to.some(x=>customReplyToken(parseAddress(x)))) return;
   const candidates=uniqueAliases(data.to.map(parseAddress));
   if(!candidates.length)return;
   const enabled:string[]=[];
@@ -186,14 +213,14 @@ async function handleCustomAliasEmail(resend: Resend, data: {email_id?:string;fr
     }
     await campBridge("alias_archive_finish",{messageId:result.messageId,expected:attachments.length});
     for(const person of result.recipients||[]){
-      const claim=await campBridge<{claimed:boolean;email:string}>("alias_forward_claim",{messageId:result.messageId,forwarderId:person.id});
+      const claim=await campBridge<{claimed:boolean;email:string;replyToken:string|null}>("alias_forward_claim",{messageId:result.messageId,forwarderId:person.id});
       if(!claim.claimed)continue;
       const forwardText=["Camp Rise Again message received at: "+address,"Original sender: "+sender,"Subject: "+safeSubject(original.subject),"",body.slice(0,14000)||"(HTML message: open the original in the portal.)",
         names.length?"Attachments are available in the private portal; files are not included in this copy.":"",
-        "Reply from the Camp Rise Again admin portal. Do not reply to this forwarded copy."].filter(Boolean).join("\n");
+        customForwardInstruction(claim.replyToken,address)].filter(Boolean).join("\n");
       let sent=false,rejected=false;
       try{
-        const response=await resend.emails.send({from:"Camp Rise Again <"+address+">",to:[claim.email],subject:"[Camp Rise Again / "+local+"] "+safeSubject(original.subject),
+        const response=await resend.emails.send({from:"Camp Rise Again <"+address+">",to:[claim.email],replyTo:customReplyAddress(claim.replyToken),subject:"[Camp Rise Again / "+local+"] "+safeSubject(original.subject),
           text:forwardText,html:campAdminEmailHtml(forwardText,"Camp Rise Again Team",await currentCampLogoUrl())},
           {idempotencyKey:"camp-alias-forward:"+result.messageId+":"+person.id});
         sent=!response.error&&!!response.data?.id;
@@ -230,8 +257,12 @@ export async function POST(req: Request) {
     if (event.type === "inbox.email.received") {
       await handleInboxEmail(resend, event.data);
     } else if (event.type === "email.received") {
-      await handleStaffReply(resend, event.data);
-      await handleCustomAliasEmail(resend, event.data);
+      if(event.data.to?.some(x=>customReplyToken(parseAddress(x)))) {
+        await handleCustomGmailReply(resend,event.data);
+      }else{
+        await handleStaffReply(resend, event.data);
+        await handleCustomAliasEmail(resend, event.data);
+      }
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

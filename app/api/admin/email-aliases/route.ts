@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { customReplyAddress, customForwardInstruction } from "@/lib/camp-custom-alias";
 import { campBridge, CampBridgeError } from "@/lib/camp-supabase-bridge";
 import { campAdminEmailHtml } from "@/lib/camp-admin-email-html";
 import { currentCampLogoUrl } from "@/lib/camp-email-branding";
@@ -29,15 +30,15 @@ export async function POST(req:Request){
     if(p.action==="download")return reply(await campBridge("admin_alias_file",p,t));
     if(p.action==="retry_forward"){
       const key=process.env.CAMP_RESEND_API_KEY;if(!key)return reply({error:"Mail not configured"},503);
-      const claim=await campBridge<{claimed:boolean;email:string;attempt:number;message:{id:string;alias:string;from_email:string;subject:string;body:string;attachment_names:string[]}}>("admin_alias_forward_retry",p,t);
+      const claim=await campBridge<{claimed:boolean;email:string;attempt:number;replyToken:string|null;message:{id:string;alias:string;from_email:string;subject:string;body:string;attachment_names:string[]}}>("admin_alias_forward_retry",p,t);
       if(!claim.claimed)return reply({error:"Forwarding no longer enabled"},409);
       const m=claim.message,address=m.alias+"@campriseagain.org";
       const body=["Camp Rise Again message received at: "+address,"Original sender: "+m.from_email,"Subject: "+m.subject,"",m.body.slice(0,14000)||"(HTML message: open the original in the portal.)",
         m.attachment_names.length?"Attachments are available in the private portal; files are not included in this copy.":"",
-        "Reply from the Camp Rise Again admin portal. Do not reply to this forwarded copy."].filter(Boolean).join("\n");
+        customForwardInstruction(claim.replyToken,address)].filter(Boolean).join("\n");
       let sent=false,rejected=false;
       try{
-        const result=await new Resend(key).emails.send({from:"Camp Rise Again <"+address+">",to:[claim.email],subject:"[Camp Rise Again / "+m.alias+"] "+m.subject,
+        const result=await new Resend(key).emails.send({from:"Camp Rise Again <"+address+">",to:[claim.email],replyTo:customReplyAddress(claim.replyToken),subject:"[Camp Rise Again / "+m.alias+"] "+m.subject,
           text:body,html:campAdminEmailHtml(body,"Camp Rise Again Team",await currentCampLogoUrl())},
           {idempotencyKey:"camp-alias-forward:"+m.id+":"+String(p.forwarderId)+":"+claim.attempt});
         sent=!result.error&&!!result.data?.id;rejected=(result.error as {statusCode?:number}|null)?.statusCode===429;
