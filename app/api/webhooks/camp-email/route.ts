@@ -165,7 +165,7 @@ async function handleCustomGmailReply(resend:Resend,data:{email_id?:string;from?
   }
 }
 async function handleCustomAliasEmail(resend: Resend, data: {email_id?:string;from?:string;to?:string[]}) {
-  if(!data.email_id || !Array.isArray(data.to) || data.to.some(x=>mailReplyRoute(x)||customReplyToken(parseAddress(x)))) return;
+  if(!data.email_id || !Array.isArray(data.to) || data.to.some(mailReplyRoute) || data.to.some(x=>customReplyToken(parseAddress(x)))) return;
   const candidates=uniqueAliases(data.to.map(parseAddress));
   if(!candidates.length)return;
   const enabled:string[]=[];
