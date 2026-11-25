@@ -312,6 +312,54 @@ Deno.serve(async (request: Request) => {
       const {data:signed,error:signError}=await db.storage.from(mailBucket).createSignedUrl(file.object_path,60,{download:file.filename});
       return signError||!signed?respond({error:"Download unavailable"},503):respond({url:signed.signedUrl});
     }
+    // A signed provider event is not proof of sender identity. Require possession
+    // of a private, high-entropy, single-use route as well as current staff authorization.
+    // Never use untrusted Authentication-Results headers as proof of identity.
+    if(action==="alias_gmail_reserve"){
+      const token=str(params.token,64), sender=email(params.sender), sourceId=str(params.sourceId,250);
+      const body=typeof params.body==="string"?params.body.trim():"";
+      if(!UUID.test(token)||!sender||!sourceId||!body||body.length>12000)return respond({claimed:false});
+      const {data:delivery,error:deliveryError}=await db.from(deliveryTable)
+        .select("message_id,forwarder_id,state,reply_expires_at").eq("reply_token",token).maybeSingle();
+      if(deliveryError)return respond({error:"Reply route unavailable"},503);
+      if(!delivery||delivery.state!=="sent"||!delivery.reply_expires_at||
+          Date.parse(delivery.reply_expires_at)<=Date.now())return respond({claimed:false});
+      const {data:original,error:originalError}=await db.from(aliasMail)
+        .select("id,alias,from_email,subject,message_id,archive_complete").eq("id",delivery.message_id).eq("direction","inbound").maybeSingle();
+      if(originalError)return respond({error:"Original message unavailable"},503);
+      const row=original?await aliasRecord(original.alias):null;
+      if(!original?.archive_complete||!row?.enabled||!row.forwarder_ids.includes(delivery.forwarder_id)||
+          !row.access_emails.includes(sender)||!(await activeCampAdmin(sender)))return respond({claimed:false});
+      const {data:staff,error:staffError}=await db.from("camp_rise_again_email_forwarders")
+        .select("email,display_name,title").eq("id",delivery.forwarder_id).eq("email",sender)
+        .eq("enabled",true).not("verified_at","is",null).maybeSingle();
+      if(staffError)return respond({error:"Reply permission unavailable"},503);
+      const recipient=email(original.from_email);
+      if(!staff||!recipient||recipient===sender||recipient.endsWith("@campriseagain.org"))return respond({claimed:false});
+      // Bound abuse even with multiple valid capabilities. The fingerprint contains no email address.
+      const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode("camp-custom-reply:"+sender))),v=>v.toString(16).padStart(2,"0")).join("");
+      const {data:rateAllowed,error:rateError}=await db.rpc("camp_rise_again_claim_form_rate",{p_fingerprint:fingerprint,p_limit:20,p_window_seconds:3600});
+      if(rateError)return respond({error:"Reply limit unavailable"},503);
+      if(!rateAllowed)return respond({claimed:false});
+      const signature=[staff.display_name,staff.title].filter(Boolean).join("\n")||"Camp Rise Again Team";
+      const address=original.alias+"@campriseagain.org";
+      const subject=("Re: "+String(original.subject).replace(/^Re:\s*/i,"").replace(/[\r\n\t]+/g," ")).slice(0,160);
+      // Unique token and inbound provider ID make the reserve atomic and replay-safe.
+      const {data:saved,error}=await db.from(aliasMail).insert({alias:original.alias,direction:"outbound",
+        gmail_reply_token:token,gmail_source_id:sourceId,sent_by:sender,reply_to_id:original.id,
+        from_email:address,to_email:recipient,subject,body:body+"\n\n"+signature,state:"pending",archive_complete:true})
+        .select("id").single();
+      if(error?.code==="23505")return respond({claimed:false});
+      if(error||!saved)return respond({error:"Reply reservation failed"},503);
+      return respond({claimed:true,id:saved.id,address,recipient,subject,body,signature,originalMessageId:original.message_id});
+    }
+    if(action==="alias_gmail_finish"){
+      const id=str(params.id,64), sourceId=str(params.sourceId,250), provider=str(params.providerId,250);
+      if(!UUID.test(id)||!sourceId)return respond({error:"Invalid reply"},400);
+      const {error}=await db.from(aliasMail).update({state:provider?"sent":"uncertain",provider_id:provider||null})
+        .eq("id",id).eq("gmail_source_id",sourceId).eq("direction","outbound").eq("state","pending");
+      return error?respond({error:"Reply state unavailable"},503):respond({ok:true});
+    }
     if(action === "alias_forward_claim" || action === "alias_forward_finish" || action === "admin_alias_forward_retry") {
       const messageId=str(params.messageId,64), forwarderId=str(params.forwarderId,64);
       if(!UUID.test(messageId)||!UUID.test(forwarderId)) return respond({error:"Invalid delivery"},400);
@@ -329,18 +377,21 @@ Deno.serve(async (request: Request) => {
         .eq("enabled",true).not("verified_at","is",null).maybeSingle();
       if(personError) return respond({error:"Recipient unavailable"},503);
       if(!person||person.email===message?.from_email) return respond({claimed:false});
+      const canReply=row.access_emails.includes(person.email)&&await activeCampAdmin(person.email);
+      const replyToken=canReply?crypto.randomUUID():null;
+      const replyExpiresAt=replyToken?new Date(Date.now()+7*86400000).toISOString():null;
       if(action==="admin_alias_forward_retry"){
         const {data:prior,error:priorError}=await db.from(deliveryTable).select("state,attempts").eq("message_id",messageId).eq("forwarder_id",forwarderId).maybeSingle();
         if(priorError)return respond({error:"Delivery unavailable"},503);
         if(!prior||prior.state!=="rejected"||prior.attempts>=3)return respond({error:"Only confirmed rejected deliveries may be retried (maximum three attempts)"},409);
-        const {data:claimed,error}=await db.from(deliveryTable).update({state:"pending",attempts:prior.attempts+1,updated_at:new Date().toISOString()})
+        const {data:claimed,error}=await db.from(deliveryTable).update({state:"pending",attempts:prior.attempts+1,reply_token:replyToken,reply_expires_at:replyExpiresAt,updated_at:new Date().toISOString()})
           .eq("message_id",messageId).eq("forwarder_id",forwarderId).eq("state","rejected").eq("attempts",prior.attempts).select("attempts").maybeSingle();
         if(error||!claimed)return respond({error:"Retry already claimed or unavailable"},409);
-        return respond({claimed:true,email:person.email,attempt:claimed.attempts,message});
+        return respond({claimed:true,email:person.email,attempt:claimed.attempts,message,replyToken});
       }
-      const {error}=await db.from(deliveryTable).insert({message_id:messageId,forwarder_id:forwarderId,state:"pending"});
+      const {error}=await db.from(deliveryTable).insert({message_id:messageId,forwarder_id:forwarderId,state:"pending",reply_token:replyToken,reply_expires_at:replyExpiresAt});
       if(error?.code==="23505") return respond({claimed:false});
-      return error?respond({error:"Cannot reserve forwarding delivery"},503):respond({claimed:true,email:person.email});
+      return error?respond({error:"Cannot reserve forwarding delivery"},503):respond({claimed:true,email:person.email,replyToken});
     }
     if(action === "admin_alias_messages" || action === "admin_alias_message" || action === "admin_alias_mark" || action === "admin_alias_reserve" || action === "admin_alias_finish") {
       const local=localAlias(params.local_part);
@@ -367,7 +418,7 @@ Deno.serve(async (request: Request) => {
           const {error}=await db.from(aliasMail).update(update).eq("alias",local).eq("id",id);
           return error?respond({error:"Unable to update message"},503):respond({ok:true});
         }
-        const {data,error}=await db.from(aliasMail).select("*").eq("alias",local).eq("id",id).maybeSingle();
+        const {data,error}=await db.from(aliasMail).select("id,alias,direction,from_email,to_email,subject,body,html_body,state,read_at,archived,created_at,attachment_names,archive_complete,reply_to_id,sent_by").eq("alias",local).eq("id",id).maybeSingle();
         if(error||!data)return respond({error:"Message not found"},404);
         const {data:files,error:fileError}=await db.from(aliasFiles).select("id,filename,byte_size,ready").eq("message_id",id).order("filename");
         const {data:deliveries,error:deliveryError}=await db.from(deliveryTable).select("forwarder_id,state,attempts,updated_at").eq("message_id",id);
