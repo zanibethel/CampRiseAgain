@@ -218,14 +218,14 @@ export default function EmailForwardingAdmin() {
           </div>
         </div>
         <fieldset>
-          <legend>Choose inboxes</legend>
+          <legend>Choose native inboxes (leave all unchecked for custom aliases only)</legend>
           <div className="checks">{inboxes.map(box => (
             <label key={box.id}><input type="checkbox" checked={newForwarder.inboxes.includes(box.id)}
               onChange={() => toggleNew(box.id)} /><InboxLabel label={box.label} address={box.address} /></label>
           ))}</div>
         </fieldset>
         <button className="btn btn-primary" type="submit"
-          disabled={busy || newForwarder.inboxes.length === 0}>
+          disabled={busy}>
           {busy ? "Saving…" : "Add & Send Verification"}
         </button>
       </form>

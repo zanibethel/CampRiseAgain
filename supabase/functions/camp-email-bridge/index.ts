@@ -36,7 +36,7 @@ function email(value: unknown): string {
   return EMAIL.test(s) && s.length <= 254 ? s : "";
 }
 function inboxes(value: unknown): string[] | null {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 3) return null;
+  if (!Array.isArray(value) || value.length > 3) return null;
   if (value.some(x => typeof x !== "string" || !INBOXES.has(x))) return null;
   return [...new Set(value as string[])];
 }
@@ -61,12 +61,13 @@ Deno.serve(async (request: Request) => {
   if (request.method !== "POST") return respond({ error: "Method not allowed" }, 405);
   if (!(await authorized(request))) return respond({ error: "Unauthorized" }, 401);
   const raw = await request.text();
-  if (raw.length > 32768) return respond({ error: "Request too large" }, 413);
+  if (raw.length > 1000000) return respond({ error: "Request too large" }, 413);
   let input: { action?: unknown; params?: Json; userToken?: unknown };
   try { input = JSON.parse(raw); } catch { return respond({ error: "Invalid JSON" }, 400); }
   const params: Json = input.params && typeof input.params === "object" && !Array.isArray(input.params)
     ? input.params : {};
   const action = str(input.action, 64);
+  if(raw.length>32768 && action!=="alias_receive") return respond({error:"Request too large"},413);
   const url = Deno.env.get("SUPABASE_URL");
   const legacyKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const newKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") || "{}");
@@ -193,6 +194,214 @@ Deno.serve(async (request: Request) => {
     if (action === "ping") {
       const { error } = await db.from("camp_rise_again_email_forwarders").select("id").limit(1);
       return error ? respond({ error: "Data query failed" }, 503) : respond({ ok: true });
+    }
+    // Custom aliases use the same authenticated admin directory as the existing portal.
+    // Each alias has an explicit ACL; other admins cannot list, read, send, or modify it.
+    const aliasTable = "camp_rise_again_mail_aliases";
+    const aliasMail = "camp_rise_again_alias_messages";
+    const deliveryTable = "camp_rise_again_alias_delivery";
+    const aliasFiles = "camp_rise_again_alias_files";
+    const mailBucket = "camp-private-mail";
+    const localAlias = (value: unknown) => {
+      const v = typeof value === "string" ? value.trim().toLowerCase() : "";
+      return /^[a-z][a-z0-9._-]{0,47}$/.test(v) && !v.startsWith("reply-") &&
+        !["info","volunteer","forms","support","postmaster","abuse","mailer-daemon","constructor","prototype","__proto__"].includes(v) ? v : "";
+    };
+    async function aliasRecord(local: string) {
+      const {data,error} = await db.from(aliasTable).select("*").eq("local_part",local).maybeSingle();
+      if(error) throw new Error("Alias query unavailable");
+      return data;
+    }
+    async function allowedAlias(local: string) {
+      const row = await aliasRecord(local);
+      return row && adminEmail && Array.isArray(row.access_emails) && row.access_emails.includes(adminEmail) ? row : null;
+    }
+    if(action === "admin_alias_list") {
+      const {data,error} = await db.from(aliasTable).select("*").contains("access_emails",[adminEmail]).order("local_part");
+      if(error) return respond({error:"Aliases unavailable"},503);
+      const {data:recipients,error:recipientError} = await db.from("camp_rise_again_email_forwarders")
+        .select("id,email,display_name,enabled,verified_at").eq("enabled",true).not("verified_at","is",null);
+      if(recipientError) return respond({error:"Forwarding recipients unavailable"},503);
+      return respond({aliases:data||[],recipients:recipients||[],email:adminEmail});
+    }
+    if(action === "admin_alias_save") {
+      const local=localAlias(params.local_part), label=str(params.label,100);
+      if(!local||!label||typeof params.enabled!=="boolean") return respond({error:"Invalid alias"},400);
+      if(!Array.isArray(params.access_emails)||params.access_emails.length>30||
+          !Array.isArray(params.forwarder_ids)||params.forwarder_ids.length>30) return respond({error:"Invalid access list"},400);
+      const access=[...new Set([adminEmail!,...params.access_emails.map(email)])];
+      const ids=[...new Set(params.forwarder_ids.map(x=>str(x,64)))];
+      if(access.some(x=>!x)||ids.some(x=>!UUID.test(x))) return respond({error:"Invalid access or forwarding recipient"},400);
+      const existing=await aliasRecord(local);
+      if(existing && !(await allowedAlias(local))) return respond({error:"Alias unavailable"},409);
+      for(const person of access) if(!(await activeCampAdmin(person))) return respond({error:"Inbox access requires an active Camp administrator"},400);
+      if(ids.length) {
+        const {data,error}=await db.from("camp_rise_again_email_forwarders").select("id").in("id",ids).eq("enabled",true).not("verified_at","is",null);
+        if(error) return respond({error:"Cannot verify forwarding recipients"},503);
+        if((data||[]).length!==ids.length) return respond({error:"Select verified, enabled forwarding recipients"},400);
+      }
+      const changes={label,enabled:params.enabled,access_emails:access,forwarder_ids:ids,updated_at:new Date().toISOString()};
+      // Use insert, never an upsert, for creation; an alias created concurrently must not be overwritten.
+      const {error}=existing
+        ?await db.from(aliasTable).update(changes).eq("local_part",local).contains("access_emails",[adminEmail])
+        :await db.from(aliasTable).insert({local_part:local,...changes,created_by:adminEmail});
+      return error?respond({error:"Alias could not be saved; refresh before retrying"},409):respond({ok:true});
+    }
+    if(action === "alias_enabled") {
+      const local=localAlias(params.local_part);
+      const row=local?await aliasRecord(local):null;
+      return respond({enabled:!!row?.enabled});
+    }
+    if(action === "alias_receive") {
+      const local=localAlias(params.local_part), sender=email(params.from_email), provider=str(params.provider_id,250);
+      const row=local?await aliasRecord(local):null;
+      if(!row?.enabled||!sender||!provider||sender.endsWith("@campriseagain.org")) return respond({accepted:false});
+      const names=Array.isArray(params.attachment_names)?params.attachment_names.slice(0,20).map(x=>str(x,200)).filter(Boolean):[];
+      const {error}=await db.from(aliasMail).upsert({alias:local,direction:"inbound",provider_id:provider,from_email:sender,
+        to_email:local+"@campriseagain.org",subject:str(params.subject,160)||"Message",body:typeof params.body==="string"?params.body.slice(0,300000):"",
+        attachment_names:names,html_body:typeof params.html_body==="string"?params.html_body.slice(0,500000):"",message_id:str(params.message_id,250)||null,state:"received"},
+        {onConflict:"alias,provider_id",ignoreDuplicates:true});
+      if(error) return respond({error:"Could not archive message"},503);
+      const {data:message,error:readError}=await db.from(aliasMail).select("id").eq("alias",local).eq("provider_id",provider).single();
+      if(readError||!message) return respond({error:"Could not locate archive"},503);
+      const ids=Array.isArray(row.forwarder_ids)?row.forwarder_ids:[];
+      if(!ids.length||params.suppress_forward===true) return respond({accepted:true,messageId:message.id,recipients:[]});
+      const {data:recipients,error:recipientError}=await db.from("camp_rise_again_email_forwarders")
+        .select("id,email").in("id",ids).eq("enabled",true).not("verified_at","is",null).neq("email",sender);
+      if(recipientError) return respond({error:"Could not load forwarding recipients"},503);
+      return respond({accepted:true,messageId:message.id,recipients:recipients||[]});
+    }
+    if(action==="alias_file_prepare" || action==="alias_file_finish" || action==="alias_archive_finish"){
+      const messageId=str(params.messageId,64);
+      if(!UUID.test(messageId))return respond({error:"Invalid message"},400);
+      const {data:message,error:messageError}=await db.from(aliasMail).select("id,alias,archive_complete").eq("id",messageId).eq("direction","inbound").maybeSingle();
+      if(messageError||!message)return respond({error:"Archive unavailable"},503);
+      if(action==="alias_archive_finish"){
+        const expected=Number(params.expected);
+        if(!Number.isInteger(expected)||expected<0||expected>100)return respond({error:"Invalid file count"},400);
+        const {count,error}=await db.from(aliasFiles).select("id",{count:"exact",head:true}).eq("message_id",messageId).eq("ready",true);
+        if(error||count!==expected)return respond({error:"Attachment archive incomplete"},503);
+        const {error:updateError}=await db.from(aliasMail).update({archive_complete:true}).eq("id",messageId);
+        return updateError?respond({error:"Archive update failed"},503):respond({ok:true});
+      }
+      const attachmentId=str(params.attachmentId,100);
+      if(!UUID.test(attachmentId))return respond({error:"Invalid attachment"},400);
+      const path=message.alias+"/"+messageId+"/"+attachmentId;
+      if(action==="alias_file_finish"){
+        const {error}=await db.from(aliasFiles).update({ready:true}).eq("message_id",messageId).eq("provider_attachment_id",attachmentId).eq("object_path",path);
+        return error?respond({error:"File state unavailable"},503):respond({ok:true});
+      }
+      const filename=str(params.filename,200).replace(/[\r\n]/g," ")||"attachment";
+      const size=Number(params.size);
+      if(!Number.isSafeInteger(size)||size<0||size>41943040)return respond({error:"Attachment exceeds storage limit"},413);
+      const {error}=await db.from(aliasFiles).upsert({message_id:messageId,provider_attachment_id:attachmentId,filename,byte_size:size,object_path:path},{onConflict:"message_id,provider_attachment_id",ignoreDuplicates:true});
+      if(error)return respond({error:"File metadata unavailable"},503);
+      const {data:existing,error:readError}=await db.from(aliasFiles).select("ready").eq("message_id",messageId).eq("provider_attachment_id",attachmentId).single();
+      if(readError||!existing)return respond({error:"File metadata unavailable"},503);
+      if(existing.ready)return respond({ready:true});
+      const {data:upload,error:uploadError}=await db.storage.from(mailBucket).createSignedUploadUrl(path,{upsert:true});
+      return uploadError||!upload?respond({error:"Upload unavailable"},503):respond({ready:false,signedUrl:upload.signedUrl});
+    }
+    if(action==="admin_alias_file"){
+      const local=localAlias(params.local_part), id=str(params.id,64), messageId=str(params.messageId,64);
+      if(!local||!UUID.test(id)||!UUID.test(messageId)||!(await allowedAlias(local)))return respond({error:"File not found"},404);
+      const {data:message,error:messageError}=await db.from(aliasMail).select("id").eq("alias",local).eq("id",messageId).maybeSingle();
+      if(messageError||!message)return respond({error:"File not found"},404);
+      const {data:file,error}=await db.from(aliasFiles).select("filename,object_path").eq("id",id).eq("message_id",messageId).eq("ready",true).maybeSingle();
+      if(error||!file)return respond({error:"File not found"},404);
+      const {data:signed,error:signError}=await db.storage.from(mailBucket).createSignedUrl(file.object_path,60,{download:file.filename});
+      return signError||!signed?respond({error:"Download unavailable"},503):respond({url:signed.signedUrl});
+    }
+    if(action === "alias_forward_claim" || action === "alias_forward_finish" || action === "admin_alias_forward_retry") {
+      const messageId=str(params.messageId,64), forwarderId=str(params.forwarderId,64);
+      if(!UUID.test(messageId)||!UUID.test(forwarderId)) return respond({error:"Invalid delivery"},400);
+      if(action==="alias_forward_finish") {
+        const {error}=await db.from(deliveryTable).update({state:params.sent===true?"sent":params.rejected===true?"rejected":"uncertain",updated_at:new Date().toISOString()})
+          .eq("message_id",messageId).eq("forwarder_id",forwarderId).eq("state","pending");
+        return error?respond({error:"Delivery state unavailable"},503):respond({ok:true});
+      }
+      const {data:message,error:messageError}=await db.from(aliasMail).select("id,alias,from_email,archive_complete,subject,body,attachment_names").eq("id",messageId).eq("direction","inbound").maybeSingle();
+      if(messageError) return respond({error:"Message unavailable"},503);
+      const row=message?await aliasRecord(message.alias):null;
+      if(action==="admin_alias_forward_retry" && (!message||!(await allowedAlias(message.alias)))) return respond({error:"Message not found"},404);
+      if(!row?.enabled||!message?.archive_complete||!row.forwarder_ids.includes(forwarderId)) return respond({claimed:false});
+      const {data:person,error:personError}=await db.from("camp_rise_again_email_forwarders").select("email").eq("id",forwarderId)
+        .eq("enabled",true).not("verified_at","is",null).maybeSingle();
+      if(personError) return respond({error:"Recipient unavailable"},503);
+      if(!person||person.email===message?.from_email) return respond({claimed:false});
+      if(action==="admin_alias_forward_retry"){
+        const {data:prior,error:priorError}=await db.from(deliveryTable).select("state,attempts").eq("message_id",messageId).eq("forwarder_id",forwarderId).maybeSingle();
+        if(priorError)return respond({error:"Delivery unavailable"},503);
+        if(!prior||prior.state!=="rejected"||prior.attempts>=3)return respond({error:"Only confirmed rejected deliveries may be retried (maximum three attempts)"},409);
+        const {data:claimed,error}=await db.from(deliveryTable).update({state:"pending",attempts:prior.attempts+1,updated_at:new Date().toISOString()})
+          .eq("message_id",messageId).eq("forwarder_id",forwarderId).eq("state","rejected").eq("attempts",prior.attempts).select("attempts").maybeSingle();
+        if(error||!claimed)return respond({error:"Retry already claimed or unavailable"},409);
+        return respond({claimed:true,email:person.email,attempt:claimed.attempts,message});
+      }
+      const {error}=await db.from(deliveryTable).insert({message_id:messageId,forwarder_id:forwarderId,state:"pending"});
+      if(error?.code==="23505") return respond({claimed:false});
+      return error?respond({error:"Cannot reserve forwarding delivery"},503):respond({claimed:true,email:person.email});
+    }
+    if(action === "admin_alias_messages" || action === "admin_alias_message" || action === "admin_alias_mark" || action === "admin_alias_reserve" || action === "admin_alias_finish") {
+      const local=localAlias(params.local_part);
+      const row=local?await allowedAlias(local):null;
+      if(!row) return respond({error:"Mailbox not found"},404);
+      if(action==="admin_alias_messages") {
+        const page=Number(params.page||0);
+        if(!Number.isInteger(page)||page<0||page>10000) return respond({error:"Invalid page"},400);
+        const folder=params.folder==="archive"?"archive":params.folder==="sent"?"sent":"inbox";
+        let q=db.from(aliasMail).select("id,direction,from_email,to_email,subject,state,read_at,archived,created_at,attachment_names").eq("alias",local)
+          .order("created_at",{ascending:false}).order("id",{ascending:false}).range(page*30,page*30+29);
+        q=folder==="archive"?q.eq("archived",true):q.eq("archived",false).eq("direction",folder==="sent"?"outbound":"inbound");
+        const {data,error}=await q;
+        return error?respond({error:"Mailbox unavailable"},503):respond({messages:data||[]});
+      }
+      if(action==="admin_alias_message"||action==="admin_alias_mark") {
+        const id=str(params.id,64);
+        if(!UUID.test(id))return respond({error:"Invalid message"},400);
+        if(action==="admin_alias_mark"){
+          const update:Json={};
+          if(typeof params.archived==="boolean")update.archived=params.archived;
+          if(params.read===true)update.read_at=new Date().toISOString();
+          if(!Object.keys(update).length)return respond({error:"No changes"},400);
+          const {error}=await db.from(aliasMail).update(update).eq("alias",local).eq("id",id);
+          return error?respond({error:"Unable to update message"},503):respond({ok:true});
+        }
+        const {data,error}=await db.from(aliasMail).select("*").eq("alias",local).eq("id",id).maybeSingle();
+        if(error||!data)return respond({error:"Message not found"},404);
+        const {data:files,error:fileError}=await db.from(aliasFiles).select("id,filename,byte_size,ready").eq("message_id",id).order("filename");
+        const {data:deliveries,error:deliveryError}=await db.from(deliveryTable).select("forwarder_id,state,attempts,updated_at").eq("message_id",id);
+        if(fileError||deliveryError)return respond({error:"Message details unavailable"},503);
+        return respond({message:{...data,files:files||[],deliveries:deliveries||[]}});
+      }
+      if(action==="admin_alias_finish"){
+        const requestId=str(params.request_id,64);
+        if(!UUID.test(requestId))return respond({error:"Invalid request"},400);
+        const provider=str(params.provider_id,250);
+        const {error}=await db.from(aliasMail).update({state:provider?"sent":"uncertain",provider_id:provider||null})
+          .eq("alias",local).eq("request_id",requestId).eq("state","pending");
+        return error?respond({error:"Send state unavailable"},503):respond({ok:true});
+      }
+      if(!row.enabled) return respond({error:"Mailbox is paused"},409);
+      const requestId=str(params.request_id,64), body=str(params.body,12000);
+      if(!UUID.test(requestId)||!body)return respond({error:"Invalid message"},400);
+      let recipient=email(params.to_email), subject=str(params.subject,160), originalMessageId:string|null=null, replyId:string|null=null;
+      if(params.reply_to_id){
+        replyId=str(params.reply_to_id,64);
+        if(!UUID.test(replyId))return respond({error:"Invalid reply"},400);
+        const {data:original,error}=await db.from(aliasMail).select("from_email,subject,message_id").eq("alias",local).eq("id",replyId).eq("direction","inbound").maybeSingle();
+        if(error||!original)return respond({error:"Original message unavailable"},404);
+        recipient=original.from_email; subject="Re: "+original.subject.replace(/^Re:\s*/i,"");originalMessageId=original.message_id;
+      }
+      if(!recipient||recipient.endsWith("@campriseagain.org")||subject.length<3||/[\r\n]/.test(subject))return respond({error:"Enter a valid external recipient and subject"},400);
+      const {data:person,error:signatureError}=await db.from("camp_rise_again_email_forwarders").select("display_name,title").eq("email",adminEmail).eq("enabled",true).not("verified_at","is",null).maybeSingle();
+      if(signatureError)return respond({error:"Signature unavailable"},503);
+      const signature=person?[person.display_name,person.title].filter(Boolean).join("\n"):"Camp Rise Again Team";
+      const {error}=await db.from(aliasMail).insert({alias:local,direction:"outbound",request_id:requestId,reply_to_id:replyId,
+        from_email:local+"@campriseagain.org",to_email:recipient,subject:subject.slice(0,160),body:body+"\n\n"+signature,state:"pending"});
+      if(error?.code==="23505")return respond({error:"This request was already reserved. Review Sent before retrying."},409);
+      if(error)return respond({error:"Could not reserve message"},503);
+      return respond({recipient,subject:subject.slice(0,160),body,signature,originalMessageId});
     }
     if (action === "get_forwarders") {
       const { data, error } = await db.from("camp_rise_again_email_forwarders")

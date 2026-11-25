@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { Resend } from "resend";
+import { uniqueAliases } from "@/lib/camp-custom-alias";
 import { campBridge } from "@/lib/camp-supabase-bridge";
 import { campAdminEmailHtml } from "@/lib/camp-admin-email-html";
 import { currentCampLogoUrl } from "@/lib/camp-email-branding";
@@ -136,6 +137,75 @@ async function handleStaffReply(
   if (error) throw error;
 }
 
+async function handleCustomAliasEmail(resend: Resend, data: {email_id?:string;from?:string;to?:string[]}) {
+  if(!data.email_id || !Array.isArray(data.to) || data.to.some(mailReplyRoute)) return;
+  const candidates=uniqueAliases(data.to.map(parseAddress));
+  if(!candidates.length)return;
+  const enabled:string[]=[];
+  for(const local of candidates){
+    const result=await campBridge<{enabled:boolean}>("alias_enabled",{local_part:local});
+    if(result.enabled)enabled.push(local);
+  }
+  if(!enabled.length)return;
+  const {data:received,error}=await resend.emails.receiving.get(data.email_id);
+  if(error||!received)throw error||new Error("Cannot read custom alias email");
+  const sender=parseAddress(received.from);
+  if(!sender||sender.endsWith("@campriseagain.org"))return;
+  const original=received as unknown as {text?:string;html?:string;subject?:string;message_id?:string;attachments?:Array<{filename?:string}>;headers?:Record<string,unknown>};
+  const body=original.text||"";
+  const html=original.html||"";
+  if(body.length>300000||html.length>500000)throw new Error("Message exceeds archive limit");
+  const attachmentResponse=await resend.emails.receiving.attachments.list({emailId:data.email_id,limit:100});
+  if(attachmentResponse.error||!attachmentResponse.data||attachmentResponse.data.has_more)throw new Error("Cannot enumerate attachments");
+  const attachments=attachmentResponse.data.data;
+  const names=attachments.map(a=>String(a.filename||"Attachment").slice(0,100));
+  for(const local of enabled){
+    const address=local+"@campriseagain.org";
+    const result=await campBridge<{accepted:boolean;messageId:string;recipients:Array<{id:string;email:string}>}>("alias_receive",{
+      local_part:local,provider_id:data.email_id,from_email:sender,subject:safeSubject(original.subject),body,html_body:html,
+      message_id:original.message_id||null,attachment_names:names,suppress_forward:isAutoResponse(original.headers)
+    });
+    if(!result.accepted)continue;
+    for(const attachment of attachments){
+      const slot=await campBridge<{ready:boolean;signedUrl:string}>("alias_file_prepare",{messageId:result.messageId,attachmentId:attachment.id,filename:attachment.filename,size:attachment.size});
+      if(slot.ready)continue;
+      const download=new URL(attachment.download_url);
+      if(download.protocol!=="https:"||download.hostname!=="cdn.resend.app")throw new Error("Unexpected attachment download host");
+      const remote=await fetch(download,{redirect:"error",signal:AbortSignal.timeout(20000)});
+      if(!remote.ok||!remote.body)throw new Error("Attachment download unavailable");
+      const reader=remote.body.getReader();const chunks:Uint8Array[]=[];let total=0;
+      try{for(;;){const {done,value}=await reader.read();if(done)break;total+=value.byteLength;
+        if(total>41943040||total>attachment.size)throw new Error("Attachment exceeds declared size");chunks.push(value);}}
+      finally{await reader.cancel().catch(()=>{});}
+      if(total!==attachment.size)throw new Error("Attachment size mismatch");
+      const upload=new URL(slot.signedUrl);
+      if(upload.protocol!=="https:"||upload.hostname!=="yufptpfiwdbzzrvhkvux.supabase.co")throw new Error("Unexpected archive host");
+      const saved=await fetch(upload,{method:"PUT",headers:{"Content-Type":"application/octet-stream","Cache-Control":"max-age=0","x-upsert":"true"},body:Buffer.concat(chunks,total),redirect:"error",signal:AbortSignal.timeout(25000)});
+      if(!saved.ok)throw new Error("Attachment archive failed");
+      await campBridge("alias_file_finish",{messageId:result.messageId,attachmentId:attachment.id});
+    }
+    await campBridge("alias_archive_finish",{messageId:result.messageId,expected:attachments.length});
+    for(const person of result.recipients||[]){
+      const claim=await campBridge<{claimed:boolean;email:string}>("alias_forward_claim",{messageId:result.messageId,forwarderId:person.id});
+      if(!claim.claimed)continue;
+      const forwardText=["Camp Rise Again message received at: "+address,"Original sender: "+sender,"Subject: "+safeSubject(original.subject),"",body.slice(0,14000)||"(HTML message: open the original in the portal.)",
+        names.length?"Attachments are available in the private portal; files are not included in this copy.":"",
+        "Reply from the Camp Rise Again admin portal. Do not reply to this forwarded copy."].filter(Boolean).join("\n");
+      let sent=false,rejected=false;
+      try{
+        const response=await resend.emails.send({from:"Camp Rise Again <"+address+">",to:[claim.email],subject:"[Camp Rise Again / "+local+"] "+safeSubject(original.subject),
+          text:forwardText,html:campAdminEmailHtml(forwardText,"Camp Rise Again Team",await currentCampLogoUrl())},
+          {idempotencyKey:"camp-alias-forward:"+result.messageId+":"+person.id});
+        sent=!response.error&&!!response.data?.id;
+        // A provider 429 explicitly rejects this attempt. Transport errors or 5xx are ambiguous.
+        rejected=(response.error as {statusCode?:number}|null)?.statusCode===429;
+      }finally{
+        await campBridge("alias_forward_finish",{messageId:result.messageId,forwarderId:person.id,sent,rejected});
+      }
+    }
+  }
+}
+
 export async function POST(req: Request) {
   const webhookSecret = process.env.CAMP_RESEND_WEBHOOK_SECRET;
   if (!webhookSecret) return new NextResponse("Not configured", { status: 503 });
@@ -161,6 +231,7 @@ export async function POST(req: Request) {
       await handleInboxEmail(resend, event.data);
     } else if (event.type === "email.received") {
       await handleStaffReply(resend, event.data);
+      await handleCustomAliasEmail(resend, event.data);
     }
     return NextResponse.json({ ok: true });
   } catch (error) {

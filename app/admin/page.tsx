@@ -12,6 +12,7 @@ import {campAdminAllowed} from "@/lib/camp-admin-access";
 import SubmissionsAdmin from "@/components/SubmissionsAdmin";
 import CampCRMAdmin from "@/components/CampCRMAdmin";
 import CampInboxAdmin from "@/components/CampInboxAdmin";
+import CampAliasAdmin from "@/components/CampAliasAdmin";
 import FAQAdmin from "@/components/FAQAdmin";
 import PastCampsAdmin from "@/components/PastCampsAdmin";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
@@ -397,8 +398,8 @@ export default function AdminPage() {
 
       <div id="admin-section-content" style={{ scrollMarginTop: 20 }}>
       {activeSection === "analytics" && <VisitorAnalyticsAdmin />}
-      {activeSection === "email" && <EmailForwardingAdmin />}
-      {activeSection === "inbox" && <CampInboxAdmin initialTo={composeTo} initialContact={historyFor} />}
+      {activeSection === "email" && <><EmailForwardingAdmin /><CampAliasAdmin mode="settings" /></>}
+      {activeSection === "inbox" && <><CampInboxAdmin initialTo={composeTo} initialContact={historyFor} /><CampAliasAdmin mode="inbox" /></>}
       {activeSection === "admins" && <AdminManagement />}
       {activeSection === "submissions" && <SubmissionsAdmin />}
       {activeSection === "crm" && <CampCRMAdmin
